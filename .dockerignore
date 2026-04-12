@@ -1,0 +1,11 @@
+node_modules
+dist
+build_out
+build_check
+build2
+.git
+.github
+*.md
+*.sh
+docker-compose.yml
+pytorch_mps_app.tsx

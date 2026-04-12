@@ -1,31 +1,44 @@
 #!/bin/bash
-# Deploy llmlearn frontend to n100w (served via nginx + Nginx Proxy Manager)
-# Note: This deploys only the static frontend build. The Claude AI chat feature
-# requires the 'claude' CLI to be available locally and won't work in this deployment.
+# Deploy llmlearn to n100w via Docker
+# Usage: ./deploy.sh
 set -e
 
+REGISTRY="docker.thelittleone.rocks"
+IMAGE="${REGISTRY}/llmlearn"
 N100W="wouter@192.168.0.7"
-REMOTE_DIR="/home/wouter/llmlearn"
 
-# Build frontend
-echo "Building frontend..."
-npm run build:frontend
+TAG=$(git rev-parse --short HEAD 2>/dev/null || echo "dev")
 
-# Generate build info
-COMMIT_HASH=$(git rev-parse --short HEAD 2>/dev/null || echo "dev")
-BUILD_NUM=$(git rev-list --count HEAD 2>/dev/null || echo "0")
-DEPLOY_TIME=$(date -u '+%Y-%m-%d %H:%M UTC')
+echo "=== Building Docker image (${IMAGE}:${TAG}) ==="
+docker build -t "${IMAGE}:${TAG}" -t "${IMAGE}:latest" .
 
-cat > dist/build.json <<EOF
-{"hash":"${COMMIT_HASH}","build":${BUILD_NUM},"deployed":"${DEPLOY_TIME}"}
-EOF
+echo ""
+echo "=== Pushing to registry ==="
+docker push "${IMAGE}:${TAG}"
+docker push "${IMAGE}:latest"
 
-echo "Deploying build #${BUILD_NUM} (${COMMIT_HASH})..."
+echo ""
+echo "=== Deploying on n100w ==="
+ssh "$N100W" "
+  mkdir -p ~/llmlearn
+  cd ~/llmlearn
 
-# Create remote dir if needed
-ssh "$N100W" "mkdir -p $REMOTE_DIR"
+  # Write/update compose file
+  cat > docker-compose.yml << 'COMPOSE'
+services:
+  llmlearn:
+    image: ${IMAGE}:latest
+    container_name: llmlearn
+    restart: unless-stopped
+    ports:
+      - \"3080:80\"
+COMPOSE
 
-# Sync build output (using rsync with --delete to clean old files)
-rsync -avz --delete dist/ "$N100W:$REMOTE_DIR/public/"
+  docker pull ${IMAGE}:latest
+  docker compose up -d --force-recreate
+  echo 'Container running:'
+  docker ps --filter name=llmlearn --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
+"
 
-echo "Deploy complete! Live at https://llm.thelittleone.rocks"
+echo ""
+echo "=== Done! Live at https://llm.thelittleone.rocks ==="

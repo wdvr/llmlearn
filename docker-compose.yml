@@ -1,0 +1,9 @@
+services:
+  llmlearn:
+    image: docker.thelittleone.rocks/llmlearn:latest
+    container_name: llmlearn
+    restart: unless-stopped
+    ports:
+      - "3080:80"
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
