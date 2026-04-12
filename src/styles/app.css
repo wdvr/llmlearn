@@ -988,10 +988,153 @@ code, pre {
   .chat-panel { width: 340px; }
 }
 
-@media (max-width: 900px) {
-  .sidebar { width: 60px; }
-  .sidebar-header h1, .sidebar-header p, .nav-item span,
-  .nav-section, .sidebar-footer { display: none; }
-  .main { margin-left: 60px; }
-  .content { padding: 24px; }
+@media (max-width: 768px) {
+  /* Sidebar becomes a top bar on mobile */
+  .app {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    width: 100%;
+    height: auto;
+    position: relative;
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    padding: 0;
+  }
+
+  .sidebar-header {
+    display: none;
+  }
+
+  .sidebar-nav {
+    display: flex;
+    flex-direction: row;
+    padding: 0;
+    gap: 0;
+    white-space: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .sidebar-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .nav-section {
+    display: none;
+  }
+
+  .nav-item {
+    padding: 12px 14px;
+    font-size: 13px;
+    border-left: none;
+    border-bottom: 2px solid transparent;
+    flex-shrink: 0;
+  }
+
+  .nav-item.active {
+    border-left-color: transparent;
+    border-bottom-color: var(--accent);
+  }
+
+  .nav-dot {
+    width: 6px;
+    height: 6px;
+  }
+
+  .sidebar-footer {
+    display: none;
+  }
+
+  .main {
+    margin-left: 0;
+  }
+
+  .content {
+    padding: 20px 16px;
+  }
+
+  .home {
+    padding: 24px 16px;
+  }
+
+  .home h2 {
+    font-size: 24px;
+  }
+
+  .module-header h2 {
+    font-size: 22px;
+  }
+
+  .module-card {
+    padding: 14px 16px;
+  }
+
+  /* Chat panel full width on mobile */
+  .chat-panel {
+    width: 100%;
+  }
+
+  .chat-toggle {
+    bottom: 16px;
+    right: 16px;
+    width: 46px;
+    height: 46px;
+    font-size: 20px;
+  }
+
+  /* Exercise responsive */
+  .exercise-section {
+    padding: 20px 16px;
+  }
+
+  .exercise-actions {
+    flex-wrap: wrap;
+  }
+
+  .exercise-actions .btn {
+    flex: 1;
+    min-width: 120px;
+    text-align: center;
+  }
+
+  .exercise-editor textarea {
+    min-height: 200px;
+    font-size: 12px;
+  }
+
+  /* Quiz responsive */
+  .quiz-section {
+    padding: 20px 16px;
+  }
+
+  /* Code blocks scroll horizontally */
+  .code-block pre {
+    font-size: 12px;
+  }
+
+  /* Module nav stack on small screens */
+  .module-nav {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .module-nav .btn {
+    width: 100%;
+    text-align: center;
+  }
+
+  /* PR review */
+  .tab-bar {
+    overflow-x: auto;
+  }
+
+  .search-bar {
+    flex-direction: column;
+  }
 }
