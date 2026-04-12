@@ -135,7 +135,11 @@ app.post('/api/claude', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
   res.flushHeaders();
+
+  // Send initial keepalive so proxies don't timeout waiting for first byte
+  res.write(': keepalive\n\n');
 
   try {
     const claude = spawn('claude', args, {
@@ -143,9 +147,23 @@ app.post('/api/claude', async (req, res) => {
     });
 
     let error = '';
+    let finished = false;
+    let clientDisconnected = false;
+
+    const finish = (eventData) => {
+      if (finished) return;
+      finished = true;
+      if (!clientDisconnected) {
+        if (eventData) res.write(`data: ${JSON.stringify(eventData)}\n\n`);
+        res.write('data: [DONE]\n\n');
+        res.end();
+      }
+    };
 
     claude.stdout.on('data', (data) => {
-      res.write(`data: ${JSON.stringify({ chunk: data.toString() })}\n\n`);
+      if (!clientDisconnected) {
+        res.write(`data: ${JSON.stringify({ chunk: data.toString() })}\n\n`);
+      }
     });
 
     claude.stderr.on('data', (data) => { error += data.toString(); });
@@ -153,25 +171,36 @@ app.post('/api/claude', async (req, res) => {
     claude.stdin.write(fullPrompt);
     claude.stdin.end();
 
-    claude.on('close', (code) => {
-      if (code !== 0) {
-        console.error(`Claude exited with code ${code}: ${error}`);
-        res.write(`data: ${JSON.stringify({ error: `Claude exited (code ${code}): ${error.slice(0, 500)}` })}\n\n`);
+    // Send periodic keepalive comments while waiting for response
+    const heartbeat = setInterval(() => {
+      if (!clientDisconnected && !finished) {
+        res.write(': keepalive\n\n');
       }
-      res.write('data: [DONE]\n\n');
-      res.end();
+    }, 15000);
+
+    claude.on('close', (code, signal) => {
+      clearInterval(heartbeat);
+      if (code !== 0 && !clientDisconnected) {
+        console.error(`Claude exited with code ${code} signal ${signal}: ${error}`);
+        finish({ error: `Claude exited (code ${code}, signal ${signal}): ${error.slice(0, 500)}` });
+      } else {
+        finish();
+      }
     });
 
     claude.on('error', (err) => {
+      clearInterval(heartbeat);
       console.error('Failed to spawn claude:', err.message);
-      res.write(`data: ${JSON.stringify({ error: `Failed to start claude: ${err.message}` })}\n\n`);
-      res.write('data: [DONE]\n\n');
-      res.end();
+      finish({ error: `Failed to start claude: ${err.message}` });
     });
 
     // Clean up if client disconnects
     req.on('close', () => {
-      claude.kill();
+      clientDisconnected = true;
+      clearInterval(heartbeat);
+      if (!finished) {
+        claude.kill();
+      }
     });
   } catch (err) {
     res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
