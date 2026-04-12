@@ -15,6 +15,11 @@ ssh "$N100W" "
   if [ -d ${REMOTE_DIR}/.git ]; then
     cd ${REMOTE_DIR}
     git pull --ff-only
+  elif [ -d ${REMOTE_DIR} ]; then
+    # Old non-git deploy exists, nuke it and clone fresh
+    rm -rf ${REMOTE_DIR}
+    git clone ${REPO} ${REMOTE_DIR}
+    cd ${REMOTE_DIR}
   else
     git clone ${REPO} ${REMOTE_DIR}
     cd ${REMOTE_DIR}
