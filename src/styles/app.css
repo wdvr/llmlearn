@@ -13,6 +13,8 @@
   --purple: #bc8cff;
   --code-bg: #0d1117;
   --sidebar-w: 280px;
+  --font-size: 15px;
+  --font-size-code: 13px;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -190,7 +192,7 @@ code, pre {
 }
 
 .section-content {
-  font-size: 15px;
+  font-size: var(--font-size);
   line-height: 1.75;
   color: var(--text);
 }
@@ -243,7 +245,7 @@ code, pre {
 .code-block pre {
   padding: 16px;
   overflow-x: auto;
-  font-size: 13px;
+  font-size: var(--font-size-code);
   line-height: 1.5;
 }
 
@@ -269,7 +271,7 @@ code, pre {
 }
 
 .quiz-question p {
-  font-size: 15px;
+  font-size: var(--font-size);
   font-weight: 500;
   margin-bottom: 12px;
 }
@@ -370,7 +372,7 @@ code, pre {
 
 .exercise-desc {
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: var(--font-size);
   margin-bottom: 20px;
   line-height: 1.7;
 }

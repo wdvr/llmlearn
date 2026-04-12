@@ -14,6 +14,9 @@ function App() {
     } catch { return [] }
   })
   const [chatOpen, setChatOpen] = useState(false)
+  const [fontSize, setFontSize] = useState(() => {
+    try { return parseInt(localStorage.getItem('font_size') || '15') } catch { return 15 }
+  })
   const [quizScores, setQuizScores] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem('quiz_scores') || '{}')
@@ -55,6 +58,12 @@ function App() {
   useEffect(() => {
     localStorage.setItem('completed', JSON.stringify(completed))
   }, [completed])
+
+  useEffect(() => {
+    document.documentElement.style.setProperty('--font-size', `${fontSize}px`)
+    document.documentElement.style.setProperty('--font-size-code', `${fontSize - 2}px`)
+    localStorage.setItem('font_size', fontSize.toString())
+  }, [fontSize])
 
   const markComplete = (moduleId) => {
     if (!completed.includes(moduleId)) {
@@ -113,11 +122,18 @@ function App() {
           <div className="progress-text">
             {completed.length}/{modules.length} modules — {progress}%
           </div>
-          <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '8px', opacity: 0.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span>{__COMMIT_HASH__}</span>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <button onClick={() => setFontSize(s => Math.max(11, s - 1))} style={{ background: 'none', border: '1px solid var(--border)', color: 'var(--text-muted)', borderRadius: '3px', width: '20px', height: '20px', cursor: 'pointer', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>-</button>
+              <span style={{ fontSize: '10px', color: 'var(--text-muted)', minWidth: '22px', textAlign: 'center' }}>{fontSize}</span>
+              <button onClick={() => setFontSize(s => Math.min(20, s + 1))} style={{ background: 'none', border: '1px solid var(--border)', color: 'var(--text-muted)', borderRadius: '3px', width: '20px', height: '20px', cursor: 'pointer', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
+            </div>
+            <span style={{ fontSize: '10px', color: 'var(--text-muted)', opacity: 0.5 }}>{__COMMIT_HASH__} — v{__BUILD_NUM__}</span>
+          </div>
+          <div style={{ textAlign: 'right', marginTop: '4px' }}>
             <a
               href="/oauth2/sign_out?rd=https://auth.thelittleone.rocks/oauth2/sign_out?rd=https://llm.thelittleone.rocks"
-              style={{ color: 'var(--text-muted)', textDecoration: 'none', fontSize: '10px' }}
+              style={{ color: 'var(--text-muted)', textDecoration: 'none', fontSize: '10px', opacity: 0.5 }}
             >
               logout
             </a>

@@ -1,5 +1,9 @@
 # Stage 1: Build frontend
 FROM node:20-alpine AS build
+ARG COMMIT_HASH=dev
+ARG BUILD_NUM=0
+ENV VITE_COMMIT_HASH=$COMMIT_HASH
+ENV VITE_BUILD_NUM=$BUILD_NUM
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
@@ -8,10 +12,11 @@ COPY src/ src/
 RUN npm run build
 
 # Stage 2: Run Express server + serve static files
-FROM node:20-alpine
+FROM node:20-slim
 WORKDIR /app
 
-# Claude CLI is mounted from host via docker-compose volume
+# Install claude CLI (slim is glibc-based, compatible with native binary)
+RUN npm install -g @anthropic-ai/claude-code
 
 # Copy package files and install production deps only
 COPY package.json package-lock.json ./

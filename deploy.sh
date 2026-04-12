@@ -25,8 +25,11 @@ ssh "$N100W" "
     cd ${REMOTE_DIR}
   fi
 
-  # Build and restart
-  docker compose up --build -d
+  # Build and restart (pass git info for version display)
+  HASH=\$(git rev-parse --short HEAD)
+  NUM=\$(git rev-list --count HEAD)
+  docker compose build --build-arg COMMIT_HASH=\$HASH --build-arg BUILD_NUM=\$NUM
+  docker compose up -d
 
   # Clean up old images
   docker image prune -f

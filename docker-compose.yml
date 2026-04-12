@@ -6,8 +6,7 @@ services:
     ports:
       - "3080:3001"
     volumes:
-      # Mount claude binary + config from host
-      - /home/wouter/.local/bin/claude:/usr/local/bin/claude:ro
+      # Mount claude auth from host
       - /home/wouter/.claude:/root/.claude
     environment:
       - PORT=3001
