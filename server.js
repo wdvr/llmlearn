@@ -174,9 +174,11 @@ app.post('/api/claude', async (req, res) => {
       error += data.toString();
     });
 
+    claude.stdin.on('error', (err) => console.error(`[claude] stdin error: ${err.message}`));
     const written = claude.stdin.write(fullPrompt);
     console.log(`[claude] stdin.write returned ${written}, ending stdin`);
     claude.stdin.end();
+    console.log(`[claude] stdin ended`);
 
     // Send periodic keepalive comments while waiting for response
     const heartbeat = setInterval(() => {
@@ -185,7 +187,12 @@ app.post('/api/claude', async (req, res) => {
       }
     }, 15000);
 
+    claude.on('exit', (code, signal) => {
+      console.log(`[claude] exit event: code=${code} signal=${signal}`);
+    });
+
     claude.on('close', (code, signal) => {
+      console.log(`[claude] close event: code=${code} signal=${signal} error="${error.substring(0, 200)}"`);
       clearInterval(heartbeat);
       if (code !== 0 && !clientDisconnected) {
         console.error(`Claude exited with code ${code} signal ${signal}: ${error}`);
@@ -197,15 +204,17 @@ app.post('/api/claude', async (req, res) => {
 
     claude.on('error', (err) => {
       clearInterval(heartbeat);
-      console.error('Failed to spawn claude:', err.message);
+      console.error(`[claude] error event: ${err.message}`);
       finish({ error: `Failed to start claude: ${err.message}` });
     });
 
     // Clean up if client disconnects
     req.on('close', () => {
+      console.log(`[claude] req.close event, finished=${finished}`);
       clientDisconnected = true;
       clearInterval(heartbeat);
       if (!finished) {
+        console.log(`[claude] Killing process due to client disconnect`);
         claude.kill();
       }
     });
