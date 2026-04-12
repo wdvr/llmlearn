@@ -11,8 +11,7 @@ RUN npm run build
 FROM node:20-alpine
 WORKDIR /app
 
-# Install claude CLI
-RUN npm install -g @anthropic-ai/claude-code
+# Claude CLI is mounted from host via docker-compose volume
 
 # Copy package files and install production deps only
 COPY package.json package-lock.json ./
