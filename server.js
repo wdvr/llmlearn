@@ -115,27 +115,31 @@ function formatConversation(history, systemPrompt) {
   return prompt;
 }
 
-// Debug endpoint to test spawning
-app.get('/api/debug-spawn', (req, res) => {
+// Debug endpoint to test spawning — POST version to match /api/claude
+app.post('/api/debug-spawn', (req, res) => {
+  const { prompt } = req.body || {};
+  const testPrompt = prompt || 'Say hi';
   res.setHeader('Content-Type', 'text/plain');
-  const claude = spawn('claude', ['-p', '--verbose'], {
+  console.log(`[debug-post] Spawning with prompt: "${testPrompt.substring(0, 50)}..." (${testPrompt.length} bytes)`);
+  const claude = spawn('claude', ['-p', '--model', 'claude-sonnet-4-6'], {
     env: { ...process.env, PATH: `/root/.local/bin:${process.env.PATH}` },
   });
-  claude.stdin.write('Say hi');
+  console.log(`[debug-post] pid=${claude.pid}`);
+  claude.stdin.write(testPrompt);
   claude.stdin.end();
   let out = '', err = '';
-  claude.stdout.on('data', d => { out += d.toString(); console.log('[debug] stdout:', d.toString().substring(0, 100)); });
-  claude.stderr.on('data', d => { err += d.toString(); console.log('[debug] stderr:', d.toString().substring(0, 100)); });
+  claude.stdout.on('data', d => { out += d.toString(); console.log('[debug-post] stdout:', d.toString().substring(0, 100)); });
+  claude.stderr.on('data', d => { err += d.toString(); console.log('[debug-post] stderr:', d.toString().substring(0, 100)); });
   claude.on('close', (code, signal) => {
-    console.log(`[debug] close: code=${code} signal=${signal}`);
+    console.log(`[debug-post] close: code=${code} signal=${signal}`);
     res.end(`code=${code} signal=${signal}\nstdout: ${out}\nstderr: ${err}`);
   });
   claude.on('error', e => {
-    console.log(`[debug] error: ${e.message}`);
+    console.log(`[debug-post] error: ${e.message}`);
     res.end(`error: ${e.message}`);
   });
   setTimeout(() => {
-    console.log('[debug] timeout 30s');
+    console.log('[debug-post] timeout 30s');
     res.end(`TIMEOUT\nstdout: ${out}\nstderr: ${err}`);
   }, 30000);
 });
