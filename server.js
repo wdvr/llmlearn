@@ -142,8 +142,8 @@ app.post('/api/debug-sse', (req, res) => {
     res.write('data: [DONE]\n\n');
     res.end();
   });
-  req.on('close', () => {
-    console.log(`[debug-sse] req.close`);
+  res.on('close', () => {
+    console.log(`[debug-sse] res.close`);
     claude.kill();
   });
 });
@@ -241,13 +241,13 @@ app.post('/api/claude', async (req, res) => {
       finish({ error: `Failed to start claude: ${err.message}` });
     });
 
-    // Clean up if client disconnects
-    req.on('close', () => {
-      console.log(`[claude] req.close event, finished=${finished}`);
-      clientDisconnected = true;
-      clearInterval(heartbeat);
+    // Clean up if client disconnects (use res, not req — req 'close' fires after body is consumed)
+    res.on('close', () => {
+      console.log(`[claude] res.close event, finished=${finished}`);
       if (!finished) {
         console.log(`[claude] Killing process due to client disconnect`);
+        clientDisconnected = true;
+        clearInterval(heartbeat);
         claude.kill();
       }
     });
