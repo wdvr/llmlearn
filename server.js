@@ -115,39 +115,6 @@ function formatConversation(history, systemPrompt) {
   return prompt;
 }
 
-// Debug endpoint — SSE version, mirrors /api/claude but with fixed "Say hi" prompt
-app.post('/api/debug-sse', (req, res) => {
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no');
-  res.flushHeaders();
-  res.write(': keepalive\n\n');
-
-  console.log(`[debug-sse] Starting spawn`);
-  const claude = spawn('claude', ['-p', '--model', 'claude-sonnet-4-6'], {
-    env: { ...process.env, PATH: `/root/.local/bin:${process.env.PATH}` },
-  });
-  console.log(`[debug-sse] pid=${claude.pid}`);
-  claude.stdin.write('Say hi');
-  claude.stdin.end();
-
-  claude.stdout.on('data', d => {
-    console.log('[debug-sse] stdout:', d.toString().substring(0, 100));
-    res.write(`data: ${JSON.stringify({ chunk: d.toString() })}\n\n`);
-  });
-  claude.stderr.on('data', d => console.log('[debug-sse] stderr:', d.toString().substring(0, 100)));
-  claude.on('close', (code, signal) => {
-    console.log(`[debug-sse] close: code=${code} signal=${signal}`);
-    res.write('data: [DONE]\n\n');
-    res.end();
-  });
-  res.on('close', () => {
-    console.log(`[debug-sse] res.close`);
-    claude.kill();
-  });
-});
-
 // Claude chat endpoint — streams response via SSE
 app.post('/api/claude', async (req, res) => {
   const { message, appContext, history, model } = req.body;
@@ -175,12 +142,10 @@ app.post('/api/claude', async (req, res) => {
   res.write(': keepalive\n\n');
 
   try {
-    console.log(`[claude] Spawning: claude ${args.join(' ')} (prompt ${fullPrompt.length} bytes)`);
     const claude = spawn('claude', args, {
       env: { ...process.env, PATH: `/root/.local/bin:${process.env.PATH}` },
     });
 
-    console.log(`[claude] Process spawned, pid=${claude.pid}`);
     let error = '';
     let finished = false;
     let clientDisconnected = false;
@@ -196,22 +161,15 @@ app.post('/api/claude', async (req, res) => {
     };
 
     claude.stdout.on('data', (data) => {
-      console.log(`[claude] stdout: ${data.toString().substring(0, 100)}...`);
       if (!clientDisconnected) {
         res.write(`data: ${JSON.stringify({ chunk: data.toString() })}\n\n`);
       }
     });
 
-    claude.stderr.on('data', (data) => {
-      console.error(`[claude] stderr: ${data.toString().substring(0, 200)}`);
-      error += data.toString();
-    });
+    claude.stderr.on('data', (data) => { error += data.toString(); });
 
-    claude.stdin.on('error', (err) => console.error(`[claude] stdin error: ${err.message}`));
-    const written = claude.stdin.write(fullPrompt);
-    console.log(`[claude] stdin.write returned ${written}, ending stdin`);
+    claude.stdin.write(fullPrompt);
     claude.stdin.end();
-    console.log(`[claude] stdin ended`);
 
     // Send periodic keepalive comments while waiting for response
     const heartbeat = setInterval(() => {
@@ -220,15 +178,10 @@ app.post('/api/claude', async (req, res) => {
       }
     }, 15000);
 
-    claude.on('exit', (code, signal) => {
-      console.log(`[claude] exit event: code=${code} signal=${signal}`);
-    });
-
     claude.on('close', (code, signal) => {
-      console.log(`[claude] close event: code=${code} signal=${signal} error="${error.substring(0, 200)}"`);
       clearInterval(heartbeat);
       if (code !== 0 && !clientDisconnected) {
-        console.error(`Claude exited with code ${code} signal ${signal}: ${error}`);
+        console.error(`Claude exited: code=${code} signal=${signal} ${error.slice(0, 200)}`);
         finish({ error: `Claude exited (code ${code}, signal ${signal}): ${error.slice(0, 500)}` });
       } else {
         finish();
@@ -237,15 +190,13 @@ app.post('/api/claude', async (req, res) => {
 
     claude.on('error', (err) => {
       clearInterval(heartbeat);
-      console.error(`[claude] error event: ${err.message}`);
+      console.error('Failed to spawn claude:', err.message);
       finish({ error: `Failed to start claude: ${err.message}` });
     });
 
     // Clean up if client disconnects (use res, not req — req 'close' fires after body is consumed)
     res.on('close', () => {
-      console.log(`[claude] res.close event, finished=${finished}`);
       if (!finished) {
-        console.log(`[claude] Killing process due to client disconnect`);
         clientDisconnected = true;
         clearInterval(heartbeat);
         claude.kill();
