@@ -13,10 +13,11 @@ RUN npm run build
 
 # Stage 2: Run Express server + serve static files
 FROM node:20-slim
+RUN apt-get update && apt-get install -y curl bash && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
-# Install claude CLI (slim is glibc-based, compatible with native binary)
-RUN npm install -g @anthropic-ai/claude-code
+# Install claude CLI native binary
+RUN curl -fsSL https://claude.ai/install.sh | bash
 
 # Copy package files and install production deps only
 COPY package.json package-lock.json ./
