@@ -3,5 +3,10 @@ services:
     build: .
     container_name: llmlearn
     restart: unless-stopped
-    ports:
-      - "3080:80"
+    networks:
+      - npm
+
+networks:
+  npm:
+    external: true
+    name: opt_default
