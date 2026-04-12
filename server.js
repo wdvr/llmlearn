@@ -155,14 +155,16 @@ app.post('/api/claude', async (req, res) => {
 
     claude.on('close', (code) => {
       if (code !== 0) {
-        res.write(`data: ${JSON.stringify({ error: error || 'Claude process failed' })}\n\n`);
+        console.error(`Claude exited with code ${code}: ${error}`);
+        res.write(`data: ${JSON.stringify({ error: `Claude exited (code ${code}): ${error.slice(0, 500)}` })}\n\n`);
       }
       res.write('data: [DONE]\n\n');
       res.end();
     });
 
     claude.on('error', (err) => {
-      res.write(`data: ${JSON.stringify({ error: 'Failed to start claude CLI.' })}\n\n`);
+      console.error('Failed to spawn claude:', err.message);
+      res.write(`data: ${JSON.stringify({ error: `Failed to start claude: ${err.message}` })}\n\n`);
       res.write('data: [DONE]\n\n');
       res.end();
     });
