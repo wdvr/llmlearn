@@ -5,3 +5,4 @@ build_check/
 build2/
 *.log
 .DS_Store
+vite.config.js.timestamp-*
