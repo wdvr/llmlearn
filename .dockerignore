@@ -9,3 +9,4 @@ build2
 *.sh
 docker-compose.yml
 pytorch_mps_app.tsx
+update.log

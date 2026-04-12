@@ -1,4 +1,4 @@
-# Stage 1: Build
+# Stage 1: Build frontend
 FROM node:20-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
@@ -7,8 +7,23 @@ COPY index.html vite.config.js ./
 COPY src/ src/
 RUN npm run build
 
-# Stage 2: Serve
-FROM nginx:alpine
-COPY --from=build /app/dist /usr/share/nginx/html
-COPY nginx/default.conf /etc/nginx/conf.d/default.conf
-EXPOSE 80
+# Stage 2: Run Express server + serve static files
+FROM node:20-alpine
+WORKDIR /app
+
+# Install claude CLI
+RUN npm install -g @anthropic-ai/claude-code
+
+# Copy package files and install production deps only
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+
+# Copy backend
+COPY server.js ./
+
+# Copy built frontend
+COPY --from=build /app/dist ./dist
+
+EXPOSE 3001
+
+CMD ["node", "server.js"]

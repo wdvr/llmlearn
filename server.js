@@ -1,10 +1,17 @@
 import express from 'express';
 import cors from 'cors';
 import { spawn } from 'child_process';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: '2mb' })); // larger limit for conversation history
+app.use(express.json({ limit: '2mb' }));
+
+// Serve static frontend (production)
+app.use(express.static(path.join(__dirname, 'dist')));
 
 // Build the system prompt with full app context
 function buildSystemPrompt(appContext) {
@@ -204,7 +211,12 @@ app.get('/api/prs/:number', async (req, res) => {
   }
 });
 
-const PORT = 3001;
+// SPA fallback — serve index.html for any non-API route
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
+
+const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
-  console.log(`Backend running on http://localhost:${PORT}`);
+  console.log(`Server running on http://localhost:${PORT}`);
 });
