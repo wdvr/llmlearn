@@ -4,7 +4,7 @@ services:
     container_name: llmlearn
     restart: unless-stopped
     ports:
-      - "3080:3001"
+      - "3080:3001"  # host:container — NPM uses container port 3001 directly via Docker network
     volumes:
       # Mount host claude config so claude -p works in container
       - /home/wouter/.claude:/root/.claude:ro
