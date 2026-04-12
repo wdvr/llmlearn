@@ -18,6 +18,7 @@ WORKDIR /app
 
 # Install claude CLI native binary
 RUN curl -fsSL https://claude.ai/install.sh | bash
+ENV PATH="/root/.local/bin:${PATH}"
 
 # Copy package files and install production deps only
 COPY package.json package-lock.json ./
