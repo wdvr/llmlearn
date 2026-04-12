@@ -115,6 +115,31 @@ function formatConversation(history, systemPrompt) {
   return prompt;
 }
 
+// Debug endpoint to test spawning
+app.get('/api/debug-spawn', (req, res) => {
+  res.setHeader('Content-Type', 'text/plain');
+  const claude = spawn('claude', ['-p', '--verbose'], {
+    env: { ...process.env, PATH: `/root/.local/bin:${process.env.PATH}` },
+  });
+  claude.stdin.write('Say hi');
+  claude.stdin.end();
+  let out = '', err = '';
+  claude.stdout.on('data', d => { out += d.toString(); console.log('[debug] stdout:', d.toString().substring(0, 100)); });
+  claude.stderr.on('data', d => { err += d.toString(); console.log('[debug] stderr:', d.toString().substring(0, 100)); });
+  claude.on('close', (code, signal) => {
+    console.log(`[debug] close: code=${code} signal=${signal}`);
+    res.end(`code=${code} signal=${signal}\nstdout: ${out}\nstderr: ${err}`);
+  });
+  claude.on('error', e => {
+    console.log(`[debug] error: ${e.message}`);
+    res.end(`error: ${e.message}`);
+  });
+  setTimeout(() => {
+    console.log('[debug] timeout 30s');
+    res.end(`TIMEOUT\nstdout: ${out}\nstderr: ${err}`);
+  }, 30000);
+});
+
 // Claude chat endpoint — streams response via SSE
 app.post('/api/claude', async (req, res) => {
   const { message, appContext, history, model } = req.body;
