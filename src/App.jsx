@@ -113,6 +113,9 @@ function App() {
           <div className="progress-text">
             {completed.length}/{modules.length} modules — {progress}%
           </div>
+          <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '8px', opacity: 0.5 }}>
+            {__COMMIT_HASH__}
+          </div>
         </div>
       </nav>
 
