@@ -17,6 +17,11 @@
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
+html, body {
+  overflow-x: hidden;
+  width: 100%;
+}
+
 body {
   font-family: 'Inter', -apple-system, sans-serif;
   background: var(--bg);
@@ -995,7 +1000,8 @@ code, pre {
   }
 
   .sidebar {
-    width: 100%;
+    width: 100vw;
+    max-width: 100%;
     height: auto;
     position: relative;
     flex-direction: row;
@@ -1053,14 +1059,18 @@ code, pre {
 
   .main {
     margin-left: 0;
+    width: 100vw;
+    max-width: 100%;
   }
 
   .content {
     padding: 20px 16px;
+    max-width: 100%;
   }
 
   .home {
     padding: 24px 16px;
+    max-width: 100%;
   }
 
   .home h2 {
