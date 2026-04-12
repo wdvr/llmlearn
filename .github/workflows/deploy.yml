@@ -1,0 +1,50 @@
+name: Deploy to n100w
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build:frontend
+
+      - name: Generate build info
+        run: |
+          COMMIT_HASH=$(git rev-parse --short HEAD)
+          BUILD_NUM=$(git rev-list --count HEAD)
+          DEPLOY_TIME=$(date -u '+%Y-%m-%d %H:%M UTC')
+          cat > dist/build.json <<EOF
+          {"hash":"${COMMIT_HASH}","build":${BUILD_NUM},"deployed":"${DEPLOY_TIME}"}
+          EOF
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.N100W_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H 192.168.0.7 >> ~/.ssh/known_hosts
+
+      - name: Create remote directory
+        run: ssh -i ~/.ssh/deploy_key wouter@192.168.0.7 "mkdir -p /home/wouter/llmlearn/public"
+
+      - name: Deploy to n100w
+        run: rsync -avz --delete -e "ssh -i ~/.ssh/deploy_key" dist/ wouter@192.168.0.7:/home/wouter/llmlearn/public/
+
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key

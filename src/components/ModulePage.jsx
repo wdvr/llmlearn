@@ -1,0 +1,313 @@
+import React, { useState, useRef, useEffect } from 'react'
+import { useParams, useNavigate, Link } from 'react-router-dom'
+import Quiz from './Quiz'
+import Exercise from './Exercise'
+import CodeBlock from './CodeBlock'
+
+// Render markdown-ish content: fenced code blocks, **bold**, `code`, [text](url), lists, tables
+function renderMarkdown(text) {
+  const parts = text.split(/```(?:\w*\n?)?/);
+  return parts.map((part, i) => {
+    // Odd parts are inside fenced code blocks
+    if (i % 2 === 1) {
+      return (
+        <div key={i} className="code-block" style={{ margin: '12px 0' }}>
+          <pre style={{ padding: '12px 16px', fontSize: '13px', lineHeight: '1.5', overflow: 'auto' }}>
+            <code>{part.replace(/\n$/, '')}</code>
+          </pre>
+        </div>
+      );
+    }
+    // Even parts are regular content
+    const blocks = part.split('\n\n');
+    return blocks.map((block, j) => {
+      const trimmed = block.trim();
+      if (!trimmed) return null;
+
+      // Check for table
+      if (/^\|.*\|/.test(trimmed) && trimmed.includes('---')) {
+        const rows = trimmed.split('\n').filter(r => r.trim());
+        const header = rows[0].split('|').map(s => s.trim()).filter(Boolean);
+        const body = rows.slice(2).map(r => r.split('|').map(s => s.trim()).filter(Boolean));
+        return (
+          <div key={`${i}-${j}`} style={{ overflowX: 'auto', margin: '12px 0' }}>
+            <table style={{ fontSize: '13px', borderCollapse: 'collapse', width: '100%' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                  {header.map((h, k) => (
+                    <th key={k} style={{ textAlign: 'left', padding: '6px 10px', color: 'var(--text-muted)', fontWeight: 600 }}>
+                      {inlineMarkdown(h)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {body.map((row, ri) => (
+                  <tr key={ri} style={{ borderBottom: '1px solid var(--bg-tertiary)' }}>
+                    {row.map((cell, ci) => (
+                      <td key={ci} style={{ padding: '6px 10px', fontSize: '13px' }}>
+                        {inlineMarkdown(cell)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      }
+
+      // Check for blockquote
+      if (trimmed.startsWith('>')) {
+        const quoteText = trimmed.split('\n').map(l => l.replace(/^>\s?/, '')).join(' ');
+        return (
+          <blockquote key={`${i}-${j}`} style={{
+            margin: '12px 0', padding: '12px 16px', borderLeft: '3px solid var(--accent)',
+            background: 'var(--bg-tertiary)', borderRadius: '0 6px 6px 0', fontStyle: 'italic',
+            color: 'var(--text-muted)', lineHeight: '1.65'
+          }}>
+            {inlineMarkdown(quoteText)}
+          </blockquote>
+        );
+      }
+
+      // Check for list block (lines starting with -)
+      const lines = trimmed.split('\n');
+      if (lines.every(l => /^\s*-\s+/.test(l) || l.trim() === '')) {
+        return (
+          <ul key={`${i}-${j}`} style={{ margin: '8px 0 8px 20px', listStyle: 'disc' }}>
+            {lines.filter(l => l.trim()).map((l, k) => (
+              <li key={k} style={{ marginBottom: '4px', fontSize: '15px', lineHeight: '1.65' }}>
+                {inlineMarkdown(l.replace(/^\s*-\s+/, ''))}
+              </li>
+            ))}
+          </ul>
+        );
+      }
+
+      // Check for numbered list
+      if (lines.every(l => /^\s*\d+\.\s+/.test(l) || l.trim() === '')) {
+        return (
+          <ol key={`${i}-${j}`} style={{ margin: '8px 0 8px 20px' }}>
+            {lines.filter(l => l.trim()).map((l, k) => (
+              <li key={k} style={{ marginBottom: '4px', fontSize: '15px', lineHeight: '1.65' }}>
+                {inlineMarkdown(l.replace(/^\s*\d+\.\s+/, ''))}
+              </li>
+            ))}
+          </ol>
+        );
+      }
+
+      // Check for heading (## ... #### supported)
+      const headingMatch = trimmed.match(/^(#{1,4})\s+(.+)/);
+      if (headingMatch) {
+        const level = headingMatch[1].length;
+        const text = headingMatch[2];
+        const styles = {
+          1: { fontSize: '22px', fontWeight: 700, marginTop: '28px', marginBottom: '14px', color: 'var(--accent)' },
+          2: { fontSize: '19px', fontWeight: 700, marginTop: '24px', marginBottom: '12px', color: 'var(--text)' },
+          3: { fontSize: '16px', fontWeight: 600, marginTop: '20px', marginBottom: '10px', color: 'var(--text-muted)' },
+          4: { fontSize: '14px', fontWeight: 600, marginTop: '16px', marginBottom: '8px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' },
+        };
+        const Tag = `h${Math.min(level + 2, 6)}`; // offset since section already uses h3
+        return <Tag key={`${i}-${j}`} style={styles[level] || styles[4]}>{inlineMarkdown(text)}</Tag>;
+      }
+
+      // Check for block with mixed content (headers + paragraphs in same block)
+      if (lines.some(l => /^#{1,4}\s+/.test(l)) && lines.length > 1) {
+        return (
+          <div key={`${i}-${j}`}>
+            {lines.map((line, k) => {
+              const hm = line.match(/^(#{1,4})\s+(.+)/);
+              if (hm) {
+                const lvl = hm[1].length;
+                const styles = {
+                  1: { fontSize: '22px', fontWeight: 700, marginTop: '28px', marginBottom: '14px', color: 'var(--accent)' },
+                  2: { fontSize: '19px', fontWeight: 700, marginTop: '24px', marginBottom: '12px', color: 'var(--text)' },
+                  3: { fontSize: '16px', fontWeight: 600, marginTop: '20px', marginBottom: '10px', color: 'var(--text-muted)' },
+                  4: { fontSize: '14px', fontWeight: 600, marginTop: '16px', marginBottom: '8px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' },
+                };
+                const Tag = `h${Math.min(lvl + 2, 6)}`;
+                return <Tag key={k} style={styles[lvl] || styles[4]}>{inlineMarkdown(hm[2])}</Tag>;
+              }
+              if (line.trim()) {
+                return <p key={k} style={{ marginBottom: '8px', lineHeight: '1.75' }}>{inlineMarkdown(line)}</p>;
+              }
+              return null;
+            })}
+          </div>
+        );
+      }
+
+      // Regular paragraph — handle embedded list items with \n-
+      return <p key={`${i}-${j}`} style={{ marginBottom: '12px', lineHeight: '1.75' }}>{inlineMarkdown(trimmed.replace(/\n/g, ' '))}</p>;
+    });
+  });
+}
+
+// Handle inline formatting: **bold**, `code`, [text](url)
+function inlineMarkdown(text) {
+  if (!text) return text;
+  const tokens = [];
+  let rest = text;
+  let key = 0;
+
+  while (rest.length) {
+    const bold = rest.match(/\*\*(.+?)\*\*/);
+    const code = rest.match(/`([^`]+)`/);
+    const link = rest.match(/\[([^\]]+)\]\(([^)]+)\)/);
+    const candidates = [bold, code, link].filter(Boolean);
+    if (!candidates.length) { tokens.push(rest); break; }
+
+    const next = candidates.sort((a, b) => a.index - b.index)[0];
+    if (next.index > 0) tokens.push(rest.slice(0, next.index));
+
+    if (next === bold) {
+      tokens.push(<strong key={key++} style={{ color: 'var(--accent)', fontWeight: 600 }}>{bold[1]}</strong>);
+    } else if (next === code) {
+      tokens.push(<code key={key++} style={{
+        background: 'var(--bg-tertiary)', padding: '1px 5px', borderRadius: '3px', fontSize: '13px', fontFamily: "'JetBrains Mono', monospace"
+      }}>{code[1]}</code>);
+    } else if (next === link) {
+      tokens.push(
+        <a key={key++} href={link[2]} target="_blank" rel="noopener noreferrer"
+          style={{ color: 'var(--accent)', textDecoration: 'underline', textDecorationColor: 'rgba(88,166,255,0.3)' }}>
+          {link[1]}
+        </a>
+      );
+    }
+    rest = rest.slice(next.index + next[0].length);
+  }
+  return tokens;
+}
+
+export default function ModulePage({ modules, completed, onComplete, onQuizScore, onSectionChange }) {
+  const { id } = useParams()
+  const navigate = useNavigate()
+  const module = modules.find(m => m.id === id)
+  const moduleIndex = modules.findIndex(m => m.id === id)
+
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [id])
+
+  // Track which section is visible via IntersectionObserver
+  useEffect(() => {
+    if (!module) return
+    const sections = document.querySelectorAll('.section h3')
+    if (!sections.length) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting && onSectionChange) {
+            onSectionChange(entry.target.textContent)
+          }
+        }
+      },
+      { rootMargin: '-20% 0px -60% 0px' }
+    )
+
+    sections.forEach(el => observer.observe(el))
+    // Set initial section
+    if (onSectionChange && module.sections?.[0]) {
+      onSectionChange(module.sections[0].title)
+    }
+
+    return () => observer.disconnect()
+  }, [id, module])
+
+  if (!module) {
+    return <div className="content"><p>Module not found.</p></div>
+  }
+
+  const prevModule = moduleIndex > 0 ? modules[moduleIndex - 1] : null
+  const nextModule = moduleIndex < modules.length - 1 ? modules[moduleIndex + 1] : null
+
+  return (
+    <div className="content">
+      <div className="module-header">
+        <h2>{module.title}</h2>
+        <p>{module.description}</p>
+      </div>
+
+      {module.sections.map((section, i) => (
+        <div key={i} className="section">
+          <h3>{section.title}</h3>
+          <div className="section-content">
+            {renderMarkdown(section.content)}
+          </div>
+          {section.code && <CodeBlock code={section.code} />}
+          {section.references && section.references.length > 0 && (
+            <div style={{
+              marginTop: '16px',
+              padding: '12px 16px',
+              background: 'var(--bg-tertiary)',
+              borderRadius: '8px',
+              borderLeft: '3px solid var(--purple)'
+            }}>
+              <div style={{ fontSize: '12px', color: 'var(--purple)', fontWeight: 600, marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Further Reading
+              </div>
+              {section.references.map((ref, j) => (
+                <div key={j} style={{ marginBottom: '4px' }}>
+                  <a
+                    href={ref.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: 'var(--accent)', textDecoration: 'none', fontSize: '13px' }}
+                  >
+                    {ref.title} →
+                  </a>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+
+      {module.quiz && (
+        <Quiz
+          questions={module.quiz}
+          moduleId={module.id}
+          onScore={(score, total) => onQuizScore?.(module.id, score, total)}
+        />
+      )}
+
+      {module.exercise && (
+        <Exercise exercise={module.exercise} />
+      )}
+
+      <div className="module-nav">
+        {prevModule ? (
+          <Link to={`/module/${prevModule.id}`} className="btn btn-secondary">
+            ← {prevModule.title}
+          </Link>
+        ) : <div />}
+
+        {completed.includes(module.id) ? (
+          <span className="btn btn-success" style={{ cursor: 'default' }}>
+            ✓ Completed
+          </span>
+        ) : (
+          <button
+            className="btn btn-primary"
+            onClick={() => onComplete(module.id)}
+          >
+            Mark as Complete
+          </button>
+        )}
+
+        {nextModule ? (
+          <Link to={`/module/${nextModule.id}`} className="btn btn-secondary">
+            {nextModule.title} →
+          </Link>
+        ) : (
+          <Link to="/prs" className="btn btn-secondary">
+            PR Review →
+          </Link>
+        )}
+      </div>
+    </div>
+  )
+}

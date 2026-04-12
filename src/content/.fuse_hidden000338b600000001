@@ -1,0 +1,2279 @@
+/**
+ * PyTorch/LLM Learning App - Modules 4-6
+ * Building Blocks: Embeddings, Attention, and Transformer Architecture
+ *
+ * These modules cover the fundamental mechanisms that power modern language models,
+ * from embeddings and positional encoding through self-attention to complete transformer implementations.
+ */
+
+export const modules_4_6 = [
+  {
+    id: 'llm-building-blocks',
+    title: 'LLM Building Blocks',
+    description: 'Master embeddings, positional encoding, and the self-attention mechanism that forms the heart of transformer models. Understand token representation, why attention is permutation-invariant, and the mathematical foundations of modern LLMs.',
+    sections: [
+      {
+        title: 'Embeddings & Positional Encoding',
+        content: `
+## Token Embeddings: From Discrete to Continuous
+
+Language models operate on discrete tokens (integer IDs), but neural networks work with continuous vectors. Embeddings bridge this gap by learning a rich vector representation for each token.
+
+### The Embedding Layer: A Learned Lookup Table
+
+An embedding layer is a parameter matrix E ∈ ℝ^(V × d) where:
+- **V** = vocabulary size (number of unique tokens)
+- **d** = embedding dimension (typically 512-4096)
+
+**Forward pass**: Given token ID k, retrieve row k: embedding = E[k]
+
+**Why it works**: During training, the model learns to position semantically similar tokens near each other in embedding space. This emerges naturally from the next-token prediction objective without explicit supervision.
+
+### Why This Matters
+
+The distributional hypothesis states: *tokens appearing in similar contexts have similar meanings*. By learning embeddings end-to-end for your task, you capture task-specific semantics. A token like "bank" learns different embeddings depending on whether you're modeling financial text or rivers text.
+
+## Positional Encoding: Adding Order Information
+
+### The Problem: Permutation Invariance
+
+Attention mechanisms compute similarity via dot products: scores = QK^T. These scores only depend on token identities, not positions. Two sequences with identical tokens in different orders produce identical attention patterns.
+
+This is a critical flaw: "dog bites man" vs "man bites dog" have opposite meanings. We need explicit position information.
+
+### Learned Positional Embeddings (GPT-2 Style)
+
+**Simple approach**: Create a position embedding matrix P ∈ ℝ^(T_max × d) where T_max is the maximum sequence length.
+
+**Usage**:
+\`\`\`python
+positions = [0, 1, 2, ..., T-1]
+pos_embed = P[positions]  # shape (T, d)
+token_embed = E[token_ids]  # shape (T, d)
+combined = token_embed + pos_embed  # element-wise sum
+\`\`\`
+
+**Advantages**:
+- Simple, interpretable
+- Learned end-to-end like token embeddings
+- Works for sequences ≤ T_max
+
+**Disadvantages**:
+- Cannot extrapolate beyond training length
+- No inductive bias about position relationships
+
+### Modern: Rotary Position Embeddings (RoPE)
+
+RoPE (used in Llama, GPT-Neo) encodes position via rotation matrices applied directly to Q and K during attention. This enables:
+- Extrapolation to longer sequences
+- Better mathematical properties
+- Strong generalization
+
+We focus on learned embeddings here, but RoPE is worth studying later.
+
+### Key Insight: Dimensions at Each Step
+
+Let's trace embedding dimensions through a forward pass:
+
+- Input token IDs: shape (batch_size=2, seq_len=10)
+- Token embeddings E[token_ids]: (2, 10, 768)
+- Position embeddings P[positions]: (10, 768)
+- Combined: (2, 10, 768)
+- After LayerNorm: (2, 10, 768)
+
+The embedding dimension stays constant throughout the model.
+
+## Common Pitfalls
+
+1. **Not adding position information**: Model will be unable to distinguish word order
+2. **Embedding dimension mismatch**: E and P must have same dimension d
+3. **Freezing embeddings**: Don't freeze embeddings; let them train end-to-end
+4. **Insufficient initialization**: Initialize embeddings with proper variance (usually N(0, 1/d))
+        `,
+        code: `
+import torch
+import torch.nn as nn
+
+# ===== Embedding Layer Example =====
+vocab_size = 10000
+embedding_dim = 768
+batch_size = 2
+seq_len = 10
+
+# Token embedding layer (PyTorch built-in)
+token_embedding = nn.Embedding(vocab_size, embedding_dim)
+
+# Create sample token IDs
+token_ids = torch.randint(0, vocab_size, (batch_size, seq_len))
+print(f"Token IDs shape: {token_ids.shape}")  # (2, 10)
+
+# Get embeddings
+token_vectors = token_embedding(token_ids)
+print(f"Token vectors shape: {token_vectors.shape}")  # (2, 10, 768)
+
+# ===== Positional Embeddings =====
+max_seq_length = 2048
+position_embedding = nn.Embedding(max_seq_length, embedding_dim)
+
+# Create position indices
+positions = torch.arange(seq_len, dtype=torch.long)
+print(f"Positions: {positions}")
+
+# Get position embeddings
+pos_vectors = position_embedding(positions)
+print(f"Position vectors shape: {pos_vectors.shape}")  # (10, 768)
+
+# ===== Combined Embeddings =====
+# Broadcasting: token (2, 10, 768) + position (10, 768) → (2, 10, 768)
+combined = token_vectors + pos_vectors
+print(f"Combined embeddings shape: {combined.shape}")  # (2, 10, 768)
+
+# ===== Verify Gradient Flow =====
+combined.sum().backward()
+print(f"Token embedding grad exists: {token_embedding.weight.grad is not None}")
+print(f"Position embedding grad exists: {position_embedding.weight.grad is not None}")
+
+# ===== Demonstrating Permutation Invariance Problem =====
+
+class DotProductAttention(nn.Module):
+    """Simplified attention to show permutation issue"""
+    def __init__(self, embed_dim):
+        super().__init__()
+        self.W_q = nn.Linear(embed_dim, embed_dim)
+        self.W_k = nn.Linear(embed_dim, embed_dim)
+
+    def forward(self, x):
+        Q = self.W_q(x)  # (batch, seq, dim)
+        K = self.W_k(x)  # (batch, seq, dim)
+        scores = torch.matmul(Q, K.transpose(-2, -1))  # (batch, seq, seq)
+        return scores
+
+# Create attention module
+attn = DotProductAttention(embedding_dim)
+
+# Original sequence attention
+scores_original = attn(combined)
+print(f"\\nOriginal attention scores shape: {scores_original.shape}")
+
+# Permuted sequence: shuffle positions 1 and 3
+perm_indices = torch.tensor([0, 3, 2, 1, 4, 5, 6, 7, 8, 9])
+combined_permuted = combined[0, perm_indices, :].unsqueeze(0)
+scores_permuted = attn(combined_permuted)
+
+print(f"Permuted attention scores shape: {scores_permuted.shape}")
+
+# Without positional encoding, scores are permuted accordingly
+# But WITH positional encoding, order is respected!
+
+# ===== Initialize Embeddings Properly =====
+def init_embedding(embed_layer, dim):
+    \"\"\"Initialize embedding with proper variance\"\"\"
+    with torch.no_grad():
+        embed_layer.weight.normal_(mean=0, std=1.0 / dim ** 0.5)
+    return embed_layer
+
+token_embedding_initialized = init_embedding(token_embedding, embedding_dim)
+print(f"\\n✓ Embeddings initialized with variance ~ 1/√d = {1.0 / embedding_dim ** 0.5:.4f}")
+        `,
+        references: [
+          {
+            title: 'Language Models are Unsupervised Multitask Learners (GPT-2)',
+            url: 'https://d4mucfpksywv.cloudfront.net/better-language-models/language_models_are_unsupervised_multitask_learners.pdf'
+          },
+          {
+            title: 'RoFormer: Enhanced Transformer with Rotary Position Embedding',
+            url: 'https://arxiv.org/abs/2104.09864'
+          },
+          {
+            title: 'An Introduction to Neural Network based Methods for Natural Language Processing',
+            url: 'https://arxiv.org/abs/1807.10854'
+          }
+        ]
+      },
+      {
+        title: 'Self-Attention Mechanism',
+        content: `
+## Understanding Self-Attention
+
+Self-attention allows each token to compare itself against all other tokens in context, learning which relationships matter for the task.
+
+### Intuition: The Database Query
+
+Think of attention as a fuzzy database lookup:
+1. **Query**: "What information do I need?" (asked by each position)
+2. **Keys**: "What information do I provide?" (advertised by each position)
+3. **Values**: The actual information to aggregate
+
+For each position, we:
+- Compare its query against all keys (similarity scores)
+- Convert scores to attention weights (softmax)
+- Aggregate values using weights
+
+### The Math: Dimension Tracking Through Attention
+
+Given sequence of length T with embedding dimension d_model:
+
+**Input shapes**:
+- x ∈ ℝ^(batch=B, T, d_model)
+
+**Projection shapes**:
+- W_q, W_k, W_v ∈ ℝ^(d_model, d_k) where d_k is per-head dimension
+- Q = xW_q ∈ ℝ^(B, T, d_k)
+- K = xW_k ∈ ℝ^(B, T, d_k)
+- V = xW_v ∈ ℝ^(B, T, d_v)
+
+**Attention computation**:
+- Scores = QK^T ∈ ℝ^(B, T, T) — each position compared to all positions
+- Scale by 1/√d_k for stability
+- Apply softmax → attention weights ∈ ℝ^(B, T, T)
+- Output = weights @ V ∈ ℝ^(B, T, d_v)
+
+**Output shape**: (B, T, d_v) — same sequence length, new dimension
+
+### Why Scale by 1/√d_k?
+
+Dot products between random vectors have variance ≈ d_k:
+- Without scaling: large dot products → softmax becomes nearly one-hot → tiny gradients
+- With scaling by 1/√d_k: variance stays ~1 → smooth gradients → better training
+
+This small detail significantly affects convergence. Many training failures come from forgetting this scaling.
+
+### Q, K, V: Three Different Projections
+
+Why separate projections instead of using the same transformation?
+
+**Specialization**: Each projection can learn task-specific features:
+- Q projection extracts "what am I looking for"
+- K projection extracts "what am I advertising"
+- V projection extracts "what should I output"
+
+**Empirical improvement**: Models with separate Q, K, V train faster and reach better accuracy than using identical projections.
+
+### Causal Masking for Autoregressive Generation
+
+In language modeling, position t can only use information from positions ≤ t. We enforce this with causal masking:
+
+**Before softmax**, set attention scores to -∞ for all positions j > i:
+\`\`\`python
+mask = [[1,  0,  0,  0],
+        [1,  1,  0,  0],
+        [1,  1,  1,  0],
+        [1,  1,  1,  1]]
+scores[i,j] = -inf where mask[i,j] == 0
+\`\`\`
+
+After softmax, masked positions have weight 0. This prevents the model from "cheating" by looking at future tokens during training.
+
+### Why This Matters
+
+Self-attention enables:
+1. **Dense connectivity**: Every position directly compares with every other (unlike RNNs)
+2. **Interpretability**: Attention weights show which tokens the model focuses on
+3. **Long-range learning**: Gradients flow directly between distant positions
+4. **Parallelization**: All positions computed simultaneously (unlike sequential RNNs)
+
+These properties make transformers dramatically more efficient and learnable than earlier architectures.
+
+## Common Pitfalls
+
+1. **Forgetting √d_k scaling**: Leads to gradient instability and poor training
+2. **Wrong softmax dimension**: Should softmax over the key dimension (last dimension of scores)
+3. **Incorrect causal mask shape**: Must properly broadcast to (batch, 1, T, T)
+4. **Not handling masked positions in gradients**: Use torch.nan_to_num after softmax
+5. **Transposing K incorrectly**: Should be K^T for dot product with Q
+        `,
+        code: `
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import math
+
+# ===== Self-Attention with Dimension Tracking =====
+
+class SelfAttention(nn.Module):
+    def __init__(self, embed_dim, head_dim=64):
+        super().__init__()
+        self.embed_dim = embed_dim
+        self.head_dim = head_dim
+
+        # Q, K, V projections
+        self.W_q = nn.Linear(embed_dim, head_dim)
+        self.W_k = nn.Linear(embed_dim, head_dim)
+        self.W_v = nn.Linear(embed_dim, head_dim)
+
+        # Scaling factor
+        self.scale = 1.0 / math.sqrt(head_dim)
+
+    def forward(self, x, mask=None):
+        """
+        Args:
+            x: (batch, seq_len, embed_dim)
+            mask: (seq_len, seq_len) with 1=attend, 0=mask
+
+        Returns:
+            output: (batch, seq_len, head_dim)
+            weights: (batch, seq_len, seq_len)
+        """
+        batch_size, seq_len, _ = x.shape
+
+        # Project to Q, K, V
+        Q = self.W_q(x)  # (batch, seq_len, head_dim)
+        K = self.W_k(x)  # (batch, seq_len, head_dim)
+        V = self.W_v(x)  # (batch, seq_len, head_dim)
+
+        # Compute attention scores: Q @ K^T / √head_dim
+        # (batch, seq_len, head_dim) @ (batch, head_dim, seq_len)
+        # = (batch, seq_len, seq_len)
+        scores = torch.matmul(Q, K.transpose(-2, -1)) * self.scale
+        print(f"Scores shape: {scores.shape}")
+        print(f"Scores variance: {scores.var().item():.4f}")  # Should be ~1
+
+        # Apply causal mask if provided
+        if mask is not None:
+            scores = scores.masked_fill(mask == 0, float('-inf'))
+
+        # Apply softmax to get attention weights
+        weights = F.softmax(scores, dim=-1)
+
+        # Handle NaN from softmax of -inf
+        weights = torch.nan_to_num(weights, 0.0)
+        print(f"Weights shape: {weights.shape}")
+        print(f"Weights sum per query: {weights.sum(dim=-1)[0, 0].item():.4f}")  # Should be ~1
+
+        # Aggregate values: weights @ V
+        # (batch, seq_len, seq_len) @ (batch, seq_len, head_dim)
+        # = (batch, seq_len, head_dim)
+        output = torch.matmul(weights, V)
+
+        return output, weights
+
+# ===== Create Causal Mask =====
+
+def create_causal_mask(seq_len):
+    \"\"\"Lower triangular mask: position i can attend to j where j <= i\"\"\"
+    # torch.tril returns lower triangular: [[1,0,0], [1,1,0], [1,1,1]]
+    mask = torch.tril(torch.ones(seq_len, seq_len))
+    return mask
+
+# ===== Test =====
+
+embed_dim = 512
+head_dim = 64
+seq_len = 8
+batch_size = 2
+
+attention = SelfAttention(embed_dim, head_dim)
+x = torch.randn(batch_size, seq_len, embed_dim)
+
+# Without mask (bidirectional)
+print("\\n=== Bidirectional Attention ===")
+output_bi, weights_bi = attention(x)
+print(f"Output shape: {output_bi.shape}")
+
+# With causal mask
+print("\\n=== Causal Attention ===")
+mask = create_causal_mask(seq_len)
+output_causal, weights_causal = attention(x, mask=mask)
+
+# Verify causal structure
+print(f"\\nPosition 0 attention weights (should only attend to itself):")
+print(weights_causal[0, 0, :])  # Should be [1, 0, 0, ...]
+
+print(f"\\nPosition 5 attention weights (can attend to 0-5):")
+print(weights_causal[0, 5, :])  # Should be [≈0.2, ≈0.2, ..., ≈0.2, 0, 0, 0]
+
+# ===== Demonstrate Scaling Importance =====
+
+print("\\n=== Scaling Impact on Gradients ===")
+
+# Without scaling
+Q = torch.randn(100, head_dim)
+K = torch.randn(100, head_dim)
+scores_unscaled = torch.matmul(Q, K.t())
+attn_unscaled = F.softmax(scores_unscaled, dim=-1)
+
+# With scaling
+scores_scaled = scores_unscaled / math.sqrt(head_dim)
+attn_scaled = F.softmax(scores_scaled, dim=-1)
+
+print(f"Unscaled scores variance: {scores_unscaled.var().item():.2f}")  # ~64
+print(f"Scaled scores variance: {scores_scaled.var().item():.2f}")      # ~1
+print(f"\\nUnscaled attention max: {attn_unscaled.max().item():.4f}")   # Nearly one-hot
+print(f"Scaled attention max: {attn_scaled.max().item():.4f}")         # More distributed
+
+# Gradient norms
+attn_unscaled.sum().backward()
+grad_unscaled = Q.grad.norm()
+
+Q.grad = None
+attn_scaled.sum().backward()
+grad_scaled = Q.grad.norm()
+
+print(f"\\nGradient norm (unscaled): {grad_unscaled.item():.6f}")
+print(f"Gradient norm (scaled): {grad_scaled.item():.6f}")
+print("✓ Scaled version has better gradient flow")
+        `,
+        references: [
+          {
+            title: 'Attention Is All You Need (Vaswani et al., 2017)',
+            url: 'https://arxiv.org/abs/1706.03762'
+          },
+          {
+            title: 'The Illustrated Transformer (Jay Alammar)',
+            url: 'http://jalammar.github.io/illustrated-transformer/'
+          },
+          {
+            title: 'Understanding Attention and Generalization in Transformer Models',
+            url: 'https://arxiv.org/abs/2310.08680'
+          }
+        ]
+      }
+    ],
+    quiz: [
+      {
+        question: 'What is the primary purpose of positional encoding in transformers?',
+        options: [
+          'To reduce computational complexity of attention',
+          'To provide explicit position information since attention is permutation-invariant',
+          'To increase the vocabulary size',
+          'To enable processing of longer sequences than training length'
+        ],
+        correct: 1,
+        explanation: 'Attention mechanisms compute similarities using only token content, making them permutation-invariant. Without positional encoding, the model cannot distinguish "dog bites man" from "man bites dog". Positional encoding explicitly encodes sequence order.'
+      },
+      {
+        question: 'Why do we scale attention scores by 1/√d_k before softmax?',
+        options: [
+          'To normalize attention weights to sum to 1',
+          'To stabilize gradient flow by keeping dot product variance around 1',
+          'To reduce memory usage',
+          'To make the model invariant to embedding dimension'
+        ],
+        correct: 1,
+        explanation: 'Dot products of d_k-dimensional vectors have variance ~d_k. Without scaling, large dot products create sharp softmax distributions with vanishing gradients. Scaling by 1/√d_k keeps variance ~1, enabling stable training. This is critical for deep models.'
+      },
+      {
+        question: 'In self-attention, why use separate Q, K, V projections?',
+        options: [
+          'Because they must have different dimensions',
+          'To allow each to specialize in extracting different features for its role',
+          'To add computational overhead intentionally',
+          'Because they operate on different parts of the sequence'
+        ],
+        correct: 1,
+        explanation: 'Q learns to extract "what am I looking for", K learns "what I provide", V learns "what to output". Separate projections give flexibility. Empirically, models with separate Q, K, V train faster and achieve better performance than using identical projections.'
+      },
+      {
+        question: 'What does causal masking prevent in language modeling?',
+        options: [
+          'Attention computation from being efficient',
+          'Tokens from attending to future positions they cannot see at test time',
+          'Gradient flow through the network',
+          'The model from learning long-range dependencies'
+        ],
+        correct: 1,
+        explanation: 'Causal masking sets attention scores to -∞ for positions j > i, preventing position i from attending to future positions. This enforces the autoregressive property: we generate one token at a time, each depending only on previous tokens. Without it, the model would cheat by looking at answers.'
+      },
+      {
+        question: 'How do learned positional embeddings differ from sinusoidal encodings?',
+        options: [
+          'Learned embeddings are always better',
+          'Sinusoidal encodings cannot be used with large vocabularies',
+          'Learned embeddings are task-specific but limited to training length; sinusoidal encodings extrapolate better',
+          'Sinusoidal encodings require more parameters'
+        ],
+        correct: 2,
+        explanation: 'Learned positional embeddings (GPT-2 style) are trained end-to-end for your task but cannot generalize beyond max training length. Sinusoidal encodings (original Transformer) use mathematical formulas that generalize to longer sequences. Modern models often use RoPE which combines benefits of both.'
+      },
+      {
+        question: 'In the attention formula softmax(QK^T/√d_k)V, what does the output represent?',
+        options: [
+          'A probability distribution over tokens',
+          'A weighted combination of value vectors, where weights reflect relevance between positions',
+          'The next token to generate',
+          'A similarity matrix between queries and keys'
+        ],
+        correct: 1,
+        explanation: 'The output is weighted sum of V vectors: Σ_j α_j * V_j, where α_j are attention weights reflecting how relevant position j is to position i. This allows the model to aggregate information from multiple positions, with weights learned by the model.'
+      }
+    ],
+    exercise: {
+      title: 'Implement Self-Attention from Scratch',
+      description: 'Build a complete self-attention module including: (1) Q, K, V projections, (2) scaled dot-product attention computation, (3) causal masking, (4) softmax with proper handling of masked positions, and (5) output aggregation. Your implementation must handle batches correctly, produce correct gradient flow, and match reference behavior. Test against a provided reference implementation.',
+      starterCode: `
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import math
+
+class SelfAttentionFromScratch(nn.Module):
+    """
+    Implement self-attention completely from scratch.
+
+    Args:
+        embedding_dim: Input embedding dimension
+        head_dim: Output dimension per head
+    """
+    def __init__(self, embedding_dim, head_dim=64):
+        super().__init__()
+        self.embedding_dim = embedding_dim
+        self.head_dim = head_dim
+
+        # TODO: Create Q, K, V projection layers as nn.Linear
+        # Each should map from embedding_dim → head_dim
+
+        # TODO: Compute and store the scaling factor 1/√head_dim
+
+    def forward(self, x, mask=None):
+        """
+        Args:
+            x: (batch_size, seq_len, embedding_dim)
+            mask: (seq_len, seq_len) where 1=attend, 0=mask; or None
+
+        Returns:
+            output: (batch_size, seq_len, head_dim)
+            attention_weights: (batch_size, seq_len, seq_len) for visualization
+        """
+        batch_size, seq_len, _ = x.shape
+
+        # TODO: Project x to Q, K, V using the learned projections
+        # Q, K, V should all be shape (batch_size, seq_len, head_dim)
+
+        # TODO: Compute attention scores as: Q @ K^T / √head_dim
+        # Result should be (batch_size, seq_len, seq_len)
+        # Hint: Use torch.matmul and transpose(-2, -1)
+
+        # TODO: Apply causal mask if provided
+        # Hint: scores.masked_fill(mask == 0, float('-inf'))
+
+        # TODO: Apply softmax over the last dimension (key dimension)
+        # Handle NaN from softmax(-inf) using torch.nan_to_num(weights, 0.0)
+
+        # TODO: Compute output as: attention_weights @ V
+        # Result should be (batch_size, seq_len, head_dim)
+
+        return output, attention_weights
+
+# ===== Test Code =====
+if __name__ == "__main__":
+    embedding_dim = 512
+    head_dim = 64
+    seq_len = 8
+    batch_size = 2
+
+    # Create attention layer
+    attention = SelfAttentionFromScratch(embedding_dim, head_dim)
+
+    # Create input and causal mask
+    x = torch.randn(batch_size, seq_len, embedding_dim)
+    mask = torch.tril(torch.ones(seq_len, seq_len))
+
+    # Forward pass
+    output, weights = attention(x, mask=mask)
+
+    # Verify output shapes
+    assert output.shape == (batch_size, seq_len, head_dim), f"Output shape {output.shape} != {(batch_size, seq_len, head_dim)}"
+    assert weights.shape == (batch_size, seq_len, seq_len), f"Weights shape {weights.shape} != {(batch_size, seq_len, seq_len)}"
+
+    # Verify causal structure: position 0 only attends to itself
+    assert weights[0, 0, 1:].max().item() < 1e-5, "Position 0 should only attend to itself"
+    assert weights[0, -1, :].sum().item() > 0.99, "All attention weights should sum to 1"
+
+    # Verify gradient flow
+    loss = output.sum()
+    loss.backward()
+    assert attention.W_q.weight.grad is not None, "Gradients must flow through Q projection"
+
+    print("✓ All assertions passed!")
+      `,
+      solution: `
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import math
+
+class SelfAttentionFromScratch(nn.Module):
+    def __init__(self, embedding_dim, head_dim=64):
+        super().__init__()
+        self.embedding_dim = embedding_dim
+        self.head_dim = head_dim
+
+        # Q, K, V projections
+        self.W_q = nn.Linear(embedding_dim, head_dim)
+        self.W_k = nn.Linear(embedding_dim, head_dim)
+        self.W_v = nn.Linear(embedding_dim, head_dim)
+
+        # Scaling factor
+        self.scale = 1.0 / math.sqrt(head_dim)
+
+    def forward(self, x, mask=None):
+        batch_size, seq_len, _ = x.shape
+
+        # Project to Q, K, V
+        Q = self.W_q(x)  # (batch_size, seq_len, head_dim)
+        K = self.W_k(x)
+        V = self.W_v(x)
+
+        # Compute attention scores: Q @ K^T / √head_dim
+        scores = torch.matmul(Q, K.transpose(-2, -1)) * self.scale
+        # (batch_size, seq_len, seq_len)
+
+        # Apply causal mask if provided
+        if mask is not None:
+            scores = scores.masked_fill(mask == 0, float('-inf'))
+
+        # Apply softmax
+        attention_weights = F.softmax(scores, dim=-1)
+        attention_weights = torch.nan_to_num(attention_weights, 0.0)
+
+        # Aggregate values
+        output = torch.matmul(attention_weights, V)
+        # (batch_size, seq_len, head_dim)
+
+        return output, attention_weights
+
+# Test
+if __name__ == "__main__":
+    embedding_dim = 512
+    head_dim = 64
+    seq_len = 8
+    batch_size = 2
+
+    attention = SelfAttentionFromScratch(embedding_dim, head_dim)
+    x = torch.randn(batch_size, seq_len, embedding_dim)
+    mask = torch.tril(torch.ones(seq_len, seq_len))
+
+    output, weights = attention(x, mask=mask)
+
+    assert output.shape == (batch_size, seq_len, head_dim)
+    assert weights.shape == (batch_size, seq_len, seq_len)
+    assert weights[0, 0, 1:].max().item() < 1e-5
+    assert weights[0, -1, :].sum().item() > 0.99
+
+    loss = output.sum()
+    loss.backward()
+    assert attention.W_q.weight.grad is not None
+
+    print("✓ All tests passed!")
+      `
+    }
+  },
+
+  {
+    id: 'attention-deeper',
+    title: 'Attention, Deeper',
+    description: 'Explore multi-head attention, cross-attention mechanisms, and KV caching for efficient inference. Understand how transformers achieve both representational power and computational efficiency.',
+    sections: [
+      {
+        title: 'Multi-Head Attention',
+        content: `
+## Multi-Head Attention: Learning Multiple Relationship Types
+
+Single-head attention is powerful, but multi-head attention allows the model to attend to different types of relationships simultaneously. Each head can specialize in different semantic aspects.
+
+### Why Multiple Heads?
+
+Different relationships benefit from different attention patterns:
+- **Head 1**: Might focus on syntactic structure (subject-verb)
+- **Head 2**: Might focus on coreference (pronoun resolution)
+- **Head 3**: Might focus on long-range semantics
+- **Head 4-8**: Other learned patterns
+
+Using a single head forces all these to compete for the same output dimension. Multiple heads allow specialization.
+
+### The Clever Trick: Reshape Instead of Replicate
+
+**Naive approach**: Train N separate attention mechanisms with different parameters.
+**Problem**: N× the parameters and computation.
+
+**Efficient approach** (used in practice):
+1. Project from d to (N × d_k) dimensions
+2. Reshape into N separate heads of dimension d_k each
+3. Compute attention for all heads in parallel (batch matrix multiply)
+4. Concatenate heads
+5. Apply output projection W_o
+
+This uses the same number of parameters as N separate modules but computes all heads simultaneously via batched matrix operations.
+
+### Dimension Walkthrough
+
+With batch_size=2, seq_len=10, embedding_dim=512, num_heads=8, head_dim=64:
+
+**Input**: (2, 10, 512)
+
+**After Q projection**: (2, 10, 512)
+
+**Reshape for heads**: (2, 10, 8, 64)
+
+**Transpose to**: (2, 8, 10, 64) ← 8 heads computed in parallel
+
+**After attention**: (2, 8, 10, 64)
+
+**Reshape back**: (2, 10, 512) ← concatenate heads
+
+**After output projection W_o**: (2, 10, 512)
+
+The key insight: reshape operations enable parallelization without duplicating parameters.
+
+### Output Projection W_o
+
+After concatenating all heads, apply linear transformation W_o: ℝ^(h·d_k) → ℝ^d
+
+This allows:
+- **Combining information**: Mix different head perspectives
+- **Weighting**: W_o learns which heads are most important
+- **Dimension projection**: Can change output dimension if needed
+
+Analysis shows that not all heads contribute equally—W_o learns to weight informative heads more heavily.
+
+### Why This Works Better
+
+Empirically, multi-head attention:
+1. **Faster convergence**: Each head solves simpler subproblems
+2. **Implicit ensemble**: Multiple viewpoints increase robustness
+3. **Better regularization**: Prevents any single head from dominating
+4. **Extrapolation**: Models generalize better to longer sequences
+
+This is one of the key architectural innovations that makes transformers effective.
+
+## Common Pitfalls
+
+1. **Reshape errors**: Confusing (B, T, h, d) ↔ (B, h, T, d) ordering
+2. **Wrong transpose**: Forgetting to swap heads and sequence dimensions
+3. **Concatenation mistakes**: Must flatten (B, h, T, d) back to (B, T, h*d) correctly
+4. **Attention computation order**: Must be (B, h, T, d_k) @ (B, h, d_k, T)
+5. **Unequal head divisions**: embedding_dim must be divisible by num_heads
+        `,
+        code: `
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import math
+
+class MultiHeadAttention(nn.Module):
+    """
+    Multi-head self-attention with proper dimension handling.
+
+    Args:
+        embedding_dim: Model dimension (must be divisible by num_heads)
+        num_heads: Number of parallel attention heads
+        dropout: Dropout probability
+    """
+    def __init__(self, embedding_dim, num_heads=8, dropout=0.1):
+        super().__init__()
+        assert embedding_dim % num_heads == 0, "embedding_dim must be divisible by num_heads"
+
+        self.embedding_dim = embedding_dim
+        self.num_heads = num_heads
+        self.head_dim = embedding_dim // num_heads
+
+        # Single projections that output h * d_k dimensions
+        self.W_q = nn.Linear(embedding_dim, embedding_dim)
+        self.W_k = nn.Linear(embedding_dim, embedding_dim)
+        self.W_v = nn.Linear(embedding_dim, embedding_dim)
+
+        # Output projection
+        self.W_o = nn.Linear(embedding_dim, embedding_dim)
+
+        self.dropout = nn.Dropout(dropout)
+        self.scale = 1.0 / math.sqrt(self.head_dim)
+
+    def forward(self, x, mask=None):
+        """
+        Args:
+            x: (batch, seq_len, embedding_dim)
+            mask: (seq_len, seq_len) causal mask or None
+
+        Returns:
+            output: (batch, seq_len, embedding_dim)
+        """
+        batch_size, seq_len, _ = x.shape
+
+        # Project to Q, K, V: each (batch, seq_len, embedding_dim)
+        Q = self.W_q(x)
+        K = self.W_k(x)
+        V = self.W_v(x)
+
+        # Reshape for multi-head: (batch, seq_len, num_heads, head_dim)
+        Q = Q.view(batch_size, seq_len, self.num_heads, self.head_dim)
+        K = K.view(batch_size, seq_len, self.num_heads, self.head_dim)
+        V = V.view(batch_size, seq_len, self.num_heads, self.head_dim)
+
+        # Transpose to: (batch, num_heads, seq_len, head_dim)
+        Q = Q.transpose(1, 2)
+        K = K.transpose(1, 2)
+        V = V.transpose(1, 2)
+
+        # Compute attention: (batch, num_heads, seq_len, seq_len)
+        scores = torch.matmul(Q, K.transpose(-2, -1)) * self.scale
+
+        # Apply mask
+        if mask is not None:
+            # Expand mask: (seq_len, seq_len) → (1, 1, seq_len, seq_len)
+            mask = mask.unsqueeze(0).unsqueeze(0)
+            scores = scores.masked_fill(mask == 0, float('-inf'))
+
+        # Softmax
+        weights = F.softmax(scores, dim=-1)
+        weights = torch.nan_to_num(weights, 0.0)
+        weights = self.dropout(weights)
+
+        # Aggregate: (batch, num_heads, seq_len, seq_len) @ (batch, num_heads, seq_len, head_dim)
+        # = (batch, num_heads, seq_len, head_dim)
+        head_outputs = torch.matmul(weights, V)
+
+        # Reshape back: (batch, seq_len, num_heads, head_dim)
+        head_outputs = head_outputs.transpose(1, 2).contiguous()
+
+        # Concatenate heads: (batch, seq_len, embedding_dim)
+        concatenated = head_outputs.view(batch_size, seq_len, self.embedding_dim)
+
+        # Output projection
+        output = self.W_o(concatenated)
+
+        return output
+
+# ===== Test Multi-Head Attention =====
+
+embedding_dim = 512
+num_heads = 8
+seq_len = 10
+batch_size = 2
+
+mha = MultiHeadAttention(embedding_dim, num_heads)
+x = torch.randn(batch_size, seq_len, embedding_dim)
+
+# Without mask
+output = mha(x)
+print(f"Input shape: {x.shape}")
+print(f"Output shape: {output.shape}")
+assert output.shape == x.shape
+
+# With causal mask
+mask = torch.tril(torch.ones(seq_len, seq_len))
+output_causal = mha(x, mask=mask)
+print(f"\\n✓ Multi-head attention working correctly")
+print(f"Number of heads: {num_heads}")
+print(f"Dimension per head: {embedding_dim // num_heads}")
+print(f"Total parameters: {sum(p.numel() for p in mha.parameters())}")
+
+# Verify gradient flow
+loss = output.sum()
+loss.backward()
+print(f"✓ Gradients flowing correctly")
+
+# ===== Analyze Individual Head Attention Patterns =====
+
+class MultiHeadAttentionDebug(nn.Module):
+    """MHA with ability to return individual head attention weights"""
+    def __init__(self, embedding_dim, num_heads=8):
+        super().__init__()
+        assert embedding_dim % num_heads == 0
+        self.embedding_dim = embedding_dim
+        self.num_heads = num_heads
+        self.head_dim = embedding_dim // num_heads
+
+        self.W_q = nn.Linear(embedding_dim, embedding_dim)
+        self.W_k = nn.Linear(embedding_dim, embedding_dim)
+        self.W_v = nn.Linear(embedding_dim, embedding_dim)
+        self.W_o = nn.Linear(embedding_dim, embedding_dim)
+        self.scale = 1.0 / math.sqrt(self.head_dim)
+
+    def forward(self, x, return_weights=False):
+        batch_size, seq_len, _ = x.shape
+
+        Q = self.W_q(x).view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
+        K = self.W_k(x).view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
+        V = self.W_v(x).view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
+
+        scores = torch.matmul(Q, K.transpose(-2, -1)) * self.scale
+        weights = F.softmax(scores, dim=-1)
+
+        head_outputs = torch.matmul(weights, V)
+        head_outputs = head_outputs.transpose(1, 2).contiguous()
+        concatenated = head_outputs.view(batch_size, seq_len, self.embedding_dim)
+        output = self.W_o(concatenated)
+
+        if return_weights:
+            return output, weights
+        return output
+
+# Test per-head patterns
+mha_debug = MultiHeadAttentionDebug(embedding_dim, num_heads)
+x_test = torch.randn(1, seq_len, embedding_dim)
+output_debug, head_weights = mha_debug(x_test, return_weights=True)
+
+print(f"\\n=== Head Attention Patterns ===")
+print(f"Head weights shape: {head_weights.shape}")  # (batch, num_heads, seq_len, seq_len)
+
+for head_idx in range(min(3, num_heads)):
+    print(f"\\nHead {head_idx} - focus pattern:")
+    # Show what position 5 attends to
+    focus = head_weights[0, head_idx, 5, :].detach()
+    top_positions = torch.argsort(focus, descending=True)[:3]
+    print(f"  Position 5 focuses on: {top_positions.tolist()}")
+        `,
+        references: [
+          {
+            title: 'Attention Is All You Need (Vaswani et al., 2017)',
+            url: 'https://arxiv.org/abs/1706.03762'
+          },
+          {
+            title: 'Analyzing Multi-Head Self-Attention: Specialized Heads Do Heavy Lifting',
+            url: 'https://arxiv.org/abs/1905.04481'
+          },
+          {
+            title: 'The Illustrated Transformer',
+            url: 'http://jalammar.github.io/illustrated-transformer/'
+          }
+        ]
+      },
+      {
+        title: 'Cross-Attention & KV Cache',
+        content: `
+## Cross-Attention: Connecting Sequences
+
+While self-attention compares a sequence with itself, cross-attention allows two different sequences to interact. This is crucial for encoder-decoder models and multimodal applications.
+
+### The Key Difference
+
+**Self-attention**: Q, K, V all from same input
+**Cross-attention**: Q from one sequence, K and V from different sequence
+
+Mathematically identical: softmax(QK^T/√d_k)V
+
+But semantically different: "What information from the key-value sequence is relevant to my queries?"
+
+### Encoder-Decoder Architecture
+
+Classic transformer (Vaswani et al., 2017):
+1. **Encoder**: Self-attention on source language
+2. **Decoder**:
+   - Self-attention on generated tokens (causal mask)
+   - Cross-attention to encoder output (no mask)
+
+The cross-attention layer allows decoder to "look at" any part of the encoder output at any time.
+
+### Modern Applications
+
+Cross-attention appears in:
+- **Vision transformers**: Image patches attend to text descriptions
+- **Diffusion models**: Noisy images attend to text prompts
+- **Retrieval-augmented generation**: Generated text attends to retrieved documents
+- **Multimodal models**: Different modalities attending to each other
+
+### Why No Causal Mask in Cross-Attention?
+
+In cross-attention:
+- K, V come from fully-processed context (encoder)
+- No causality constraint: decoder can access all of encoder output
+- Causal mask only applies to decoder's self-attention
+
+## KV Cache: Speeding Up Inference
+
+### The Problem: Redundant Computation
+
+During training, we process full sequences at once. But during generation, we produce one token at a time:
+
+**Token 1**: Compute K₁, V₁, attend to [K₁] and [V₁]
+**Token 2**: Recompute K₁, V₁ AND compute K₂, V₂, attend to [K₁, K₂] and [V₁, V₂]
+**Token T**: Recompute all K₁...Kₜ AND Vₜ, attend to all
+
+This is O(T²) computation! We recompute K and V for previous tokens that never changed.
+
+### The Solution: Cache K and V
+
+**Key insight**: Q changes each step (new token), but K and V from previous steps never change.
+
+**Solution**: Save (cache) K and V from all previous steps.
+
+**Without cache**: O(T²) total time
+**With cache**: O(T) total time — 100× speedup for 100-token sequences
+
+### Memory vs Speed Tradeoff
+
+**Memory cost**:
+- Each layer caches (seq_len × embedding_dim) floats for K and V
+- L layers × 2 × (seq_len × embedding_dim) × 4 bytes
+- Example: 96 layers, 12.8k embed_dim, 100 tokens → ~98GB
+
+**Speed benefit**:
+- Decoding 100 tokens: 100 seconds → 1 second
+- Essential for interactive applications
+
+### Implementation Pattern
+
+```python
+# Pre-allocate max-size cache
+cache_k = torch.zeros(batch, max_len, embed_dim)
+cache_v = torch.zeros(batch, max_len, embed_dim)
+
+# Inference loop
+for step in range(num_tokens_to_gen):
+    # Only compute new K, V for current token
+    K_new = W_k(x[:, -1:, :])  # shape (batch, 1, embed_dim)
+    V_new = W_v(x[:, -1:, :])
+
+    # Append to cache
+    cache_k[:, step:step+1, :] = K_new
+    cache_v[:, step:step+1, :] = V_new
+
+    # Attend to all previous tokens using full cache
+    Q = W_q(x[:, -1:, :])  # shape (batch, 1, embed_dim)
+    scores = Q @ cache_k[:, :step+1, :].T  # (batch, 1, step+1)
+    attn = softmax(scores)
+    output = attn @ cache_v[:, :step+1, :]
+
+    next_token = sample(output)
+```
+
+### Modern Optimizations
+
+**Multi-Query Attention (MQA)**:
+- Share K, V across all heads
+- Cache size: 8-12× smaller
+- Used in Llama, Grok
+
+**Grouped-Query Attention (GQA)**:
+- Groups of heads share K, V
+- Middle ground between full attention and MQA
+- Better quality than MQA with less memory than full
+
+**Flash-Decoding**:
+- GPU kernel optimization
+- Fuses cache reading with attention
+- 2-3× speedup
+
+### Why This Matters
+
+KV caching is why LLMs can be served interactively:
+- Without it: generating 100 tokens takes minutes
+- With it: takes seconds
+- Companies built products (vLLM, TensorRT-LLM) optimizing this
+
+KV cache is the difference between unusable and responsive systems.
+
+## Common Pitfalls
+
+1. **Cache shape errors**: Forgetting batch dimension or head reshaping
+2. **Incorrect concatenation**: Using wrong dimension when appending to cache
+3. **Memory management**: Not pre-allocating, causing reallocation each step
+4. **Position encoding with cache**: Must track position correctly
+5. **RoPE with cache**: Some position encoding schemes don't work with cache
+        `,
+        code: `
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import math
+from typing import Optional, Tuple
+
+# ===== Cross-Attention =====
+
+class CrossAttention(nn.Module):
+    """Attend to different sequence (encoder-decoder, vision-language)"""
+    def __init__(self, embed_dim, num_heads=8):
+        super().__init__()
+        assert embed_dim % num_heads == 0
+        self.embed_dim = embed_dim
+        self.num_heads = num_heads
+        self.head_dim = embed_dim // num_heads
+
+        # Q from one sequence
+        self.W_q = nn.Linear(embed_dim, embed_dim)
+        # K, V from different sequence
+        self.W_k = nn.Linear(embed_dim, embed_dim)
+        self.W_v = nn.Linear(embed_dim, embed_dim)
+        self.W_o = nn.Linear(embed_dim, embed_dim)
+
+        self.scale = 1.0 / math.sqrt(self.head_dim)
+
+    def forward(self, x_query, x_key_value):
+        """
+        Args:
+            x_query: (batch, query_len, embed_dim)
+            x_key_value: (batch, kv_len, embed_dim) - different length!
+
+        Returns:
+            output: (batch, query_len, embed_dim)
+        """
+        batch_size = x_query.shape[0]
+        query_len = x_query.shape[1]
+        kv_len = x_key_value.shape[1]
+
+        # Project
+        Q = self.W_q(x_query)  # (batch, query_len, embed_dim)
+        K = self.W_k(x_key_value)  # (batch, kv_len, embed_dim)
+        V = self.W_v(x_key_value)
+
+        # Reshape for heads
+        Q = Q.view(batch_size, query_len, self.num_heads, self.head_dim).transpose(1, 2)
+        # (batch, num_heads, query_len, head_dim)
+
+        K = K.view(batch_size, kv_len, self.num_heads, self.head_dim).transpose(1, 2)
+        # (batch, num_heads, kv_len, head_dim)
+
+        V = V.view(batch_size, kv_len, self.num_heads, self.head_dim).transpose(1, 2)
+
+        # Attention: different query and KV lengths
+        # (batch, num_heads, query_len, head_dim) @ (batch, num_heads, head_dim, kv_len)
+        # = (batch, num_heads, query_len, kv_len)
+        scores = torch.matmul(Q, K.transpose(-2, -1)) * self.scale
+
+        weights = F.softmax(scores, dim=-1)
+
+        # (batch, num_heads, query_len, kv_len) @ (batch, num_heads, kv_len, head_dim)
+        # = (batch, num_heads, query_len, head_dim)
+        head_outputs = torch.matmul(weights, V)
+
+        # Reshape back
+        head_outputs = head_outputs.transpose(1, 2).contiguous()
+        concatenated = head_outputs.view(batch_size, query_len, self.embed_dim)
+        output = self.W_o(concatenated)
+
+        return output
+
+# Test cross-attention
+embed_dim = 256
+batch_size = 2
+encoder_len = 10  # "Hello world from source"
+decoder_len = 8   # "Bonjour monde..." (being generated)
+
+encoder_output = torch.randn(batch_size, encoder_len, embed_dim)
+decoder_input = torch.randn(batch_size, decoder_len, embed_dim)
+
+cross_attn = CrossAttention(embed_dim, num_heads=4)
+output = cross_attn(decoder_input, encoder_output)
+
+print(f"Encoder output: {encoder_output.shape}")
+print(f"Decoder input: {decoder_input.shape}")
+print(f"Cross-attention output: {output.shape}")
+assert output.shape == decoder_input.shape
+print("✓ Cross-attention works with different sequence lengths\\n")
+
+# ===== KV Cache for Inference =====
+
+class AttentionWithKVCache(nn.Module):
+    """Self-attention with KV caching for efficient decoding"""
+    def __init__(self, embed_dim, num_heads=8):
+        super().__init__()
+        assert embed_dim % num_heads == 0
+        self.embed_dim = embed_dim
+        self.num_heads = num_heads
+        self.head_dim = embed_dim // num_heads
+
+        self.W_q = nn.Linear(embed_dim, embed_dim)
+        self.W_k = nn.Linear(embed_dim, embed_dim)
+        self.W_v = nn.Linear(embed_dim, embed_dim)
+        self.W_o = nn.Linear(embed_dim, embed_dim)
+
+        self.scale = 1.0 / math.sqrt(self.head_dim)
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        k_cache: Optional[torch.Tensor] = None,
+        v_cache: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        Args:
+            x: (batch, seq_len, embed_dim)
+               During training: seq_len = full length
+               During inference: seq_len = 1 (just new token)
+            k_cache: Cached keys from previous positions or None
+            v_cache: Cached values or None
+
+        Returns:
+            output: (batch, seq_len, embed_dim)
+            k_cache: Updated cache
+            v_cache: Updated cache
+        """
+        batch_size, seq_len, _ = x.shape
+
+        # Project
+        Q = self.W_q(x)
+        K = self.W_k(x)
+        V = self.W_v(x)
+
+        # Reshape
+        Q = Q.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
+        K = K.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
+        V = V.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
+
+        # Update cache
+        if k_cache is None:
+            # First step: initialize cache with new K, V
+            k_cache = K
+            v_cache = V
+        else:
+            # Append new K, V to cache
+            # k_cache: (batch, num_heads, cache_len, head_dim)
+            # K: (batch, num_heads, 1, head_dim)
+            k_cache = torch.cat([k_cache, K], dim=2)
+            v_cache = torch.cat([v_cache, V], dim=2)
+
+        # Compute attention using cached K, V
+        # Q: (batch, num_heads, seq_len, head_dim) - usually 1 during inference
+        # k_cache: (batch, num_heads, cache_len, head_dim)
+        scores = torch.matmul(Q, k_cache.transpose(-2, -1)) * self.scale
+
+        weights = F.softmax(scores, dim=-1)
+        output = torch.matmul(weights, v_cache)
+
+        # Reshape to (batch, seq_len, embed_dim)
+        output = output.transpose(1, 2).contiguous()
+        output = output.view(batch_size, seq_len, self.embed_dim)
+        output = self.W_o(output)
+
+        return output, k_cache, v_cache
+
+# Demonstrate KV cache efficiency
+print("=== KV Cache Demonstration ===")
+
+embed_dim = 512
+num_heads = 8
+batch_size = 1
+max_seq = 100
+
+attn_cached = AttentionWithKVCache(embed_dim, num_heads)
+
+# Simulate inference: generate tokens one at a time
+k_cache = None
+v_cache = None
+times = []
+
+for step in range(10):  # Generate 10 tokens
+    # Input is just 1 new token
+    x_new = torch.randn(batch_size, 1, embed_dim)
+
+    # Forward with cache
+    output, k_cache, v_cache = attn_cached(x_new, k_cache, v_cache)
+
+    # Cache size grows
+    cache_size = k_cache.shape[2]
+    print(f"Step {step}: Cache size = {cache_size}, Output shape = {output.shape}")
+
+print(f"\\n✓ Cache grows from 1 to {cache_size} positions")
+print(f"  Without cache: recomputing keys/values at each step")
+print(f"  With cache: only computing new position, then appending")
+        `,
+        references: [
+          {
+            title: 'Attention Is All You Need (Vaswani et al., 2017)',
+            url: 'https://arxiv.org/abs/1706.03762'
+          },
+          {
+            title: 'Efficient Memory-Augmented Transformers',
+            url: 'https://arxiv.org/abs/2202.10047'
+          },
+          {
+            title: 'vLLM: Easy, Fast, and Cheap LLM Serving',
+            url: 'https://arxiv.org/abs/2309.06180'
+          }
+        ]
+      }
+    ],
+    quiz: [
+      {
+        question: 'In multi-head attention, how many separate learnable parameter sets are used for Q, K, V?',
+        options: [
+          '3 (one for each: Q, K, V)',
+          '3 × num_heads (separate projections per head)',
+          'Still 3 (single large projections reshaped into heads)',
+          'num_heads (one projection matrix per head)'
+        ],
+        correct: 2,
+        explanation: 'We use 3 large linear layers (W_q, W_k, W_v) that project to embedding_dim (which equals num_heads × head_dim). We then reshape the output into separate heads. This is more efficient than having num_heads × 3 separate projections.'
+      },
+      {
+        question: 'Why is it important that embedding_dim is divisible by num_heads?',
+        options: [
+          'To reduce memory usage',
+          'To ensure each head can have equal dimension: head_dim = embedding_dim / num_heads',
+          'To make computation faster',
+          'To ensure better convergence'
+        ],
+        correct: 1,
+        explanation: 'We split embedding_dim into num_heads separate heads, each with dimension head_dim = embedding_dim / num_heads. For this to work, embedding_dim must be evenly divisible by num_heads.'
+      },
+      {
+        question: 'What is the fundamental difference between self-attention and cross-attention?',
+        options: [
+          'Cross-attention uses multiple heads, self-attention uses single head',
+          'Self-attention: Q, K, V from same input; Cross-attention: Q from one sequence, K, V from different',
+          'Cross-attention is faster',
+          'Self-attention is used in encoders, cross-attention in decoders'
+        ],
+        correct: 1,
+        explanation: 'In self-attention, all three (Q, K, V) come from the same input, so each position attends to all positions in the same sequence. In cross-attention, Q comes from one sequence (query) and K, V from a different sequence (key-value), enabling two different sequences to interact.'
+      },
+      {
+        question: 'Why does KV caching provide such dramatic speedup during inference?',
+        options: [
+          'It uses more efficient GPU kernels',
+          'It prevents redundant recomputation: K and V are computed once, then appended to cache instead of recomputed',
+          'It reduces the vocabulary size',
+          'It uses lower precision arithmetic'
+        ],
+        correct: 1,
+        explanation: 'During generation of token t, without cache we recompute K and V for all previous positions 1...t-1 (wasteful). With cache, we only compute K_t and V_t for the new token, then append to cache. This reduces O(t²) operations to O(t).'
+      },
+      {
+        question: 'In cross-attention (encoder-decoder), why is there NO causal mask on the cross-attention?',
+        options: [
+          'Because cross-attention is less important than self-attention',
+          'Because the encoder output is already fully computed; the decoder can access any part at any time',
+          'To make computation faster',
+          'Because masking only applies to token generation'
+        ],
+        correct: 1,
+        explanation: 'The encoder has fully processed its input, so K and V are complete and static. The decoder can safely attend to all encoder positions without cheating. The causal mask only applies to the decoder\'s self-attention (to prevent seeing future generated tokens).'
+      },
+      {
+        question: 'Which optimization shares K and V caches across attention heads?',
+        options: [
+          'Flash Attention',
+          'Grouped-Query Attention (GQA)',
+          'Beam Search',
+          'Temperature scaling'
+        ],
+        correct: 1,
+        explanation: 'Grouped-Query Attention (GQA) shares a single set of K, V caches across groups of query heads. Multi-Query Attention (MQA) is the extreme: all heads share the same K, V. This reduces cache size dramatically (8-12× smaller) while maintaining reasonable quality.'
+      }
+    ],
+    exercise: {
+      title: 'Build Multi-Head Attention and Implement KV Cache',
+      description: 'Implement multi-head attention from scratch, handling the reshape operations correctly. Then add KV caching for inference. Your implementation must: (1) correctly reshape inputs to separate heads, (2) compute all heads in parallel via batched matrix ops, (3) concatenate heads after attention, (4) implement KV cache that grows during generation, (5) pass all validation tests.',
+      starterCode: `
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import math
+from typing import Optional, Tuple
+
+class MultiHeadAttentionFromScratch(nn.Module):
+    """
+    Multi-head attention - handle reshaping carefully!
+
+    Args:
+        embedding_dim: Model dimension (must be divisible by num_heads)
+        num_heads: Number of parallel attention heads
+    """
+    def __init__(self, embedding_dim, num_heads=8):
+        super().__init__()
+        assert embedding_dim % num_heads == 0
+
+        self.embedding_dim = embedding_dim
+        self.num_heads = num_heads
+        self.head_dim = embedding_dim // num_heads
+
+        # TODO: Create Q, K, V projections (each embedding_dim → embedding_dim)
+        # TODO: Create output projection (embedding_dim → embedding_dim)
+        # TODO: Store scaling factor
+
+    def forward(self, x, mask=None):
+        """
+        Args:
+            x: (batch, seq_len, embedding_dim)
+            mask: (seq_len, seq_len) or None
+
+        Returns:
+            output: (batch, seq_len, embedding_dim)
+        """
+        batch_size, seq_len, _ = x.shape
+
+        # TODO: Project to Q, K, V (batch, seq_len, embedding_dim)
+
+        # TODO: Reshape and transpose for heads:
+        #   (batch, seq_len, embedding_dim) →
+        #   (batch, seq_len, num_heads, head_dim) →
+        #   (batch, num_heads, seq_len, head_dim)
+        # Hint: use .view() and .transpose()
+
+        # TODO: Compute attention scores: Q @ K^T / √head_dim
+        # Result: (batch, num_heads, seq_len, seq_len)
+
+        # TODO: Apply mask if provided (expand to (1, 1, seq_len, seq_len))
+
+        # TODO: Apply softmax and handle NaN
+
+        # TODO: Multiply by V: (batch, num_heads, seq_len, seq_len) @ (batch, num_heads, seq_len, head_dim)
+        # Result: (batch, num_heads, seq_len, head_dim)
+
+        # TODO: Reshape back to (batch, seq_len, embedding_dim) and apply W_o
+
+        return output
+
+
+class AttentionWithKVCacheFromScratch(nn.Module):
+    """Multi-head attention with KV cache for efficient decoding"""
+    def __init__(self, embedding_dim, num_heads=8):
+        super().__init__()
+        # Similar to above, but must handle cache in forward pass
+        pass
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        k_cache: Optional[torch.Tensor] = None,
+        v_cache: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        Args:
+            x: (batch, seq_len, embedding_dim)
+            k_cache: Previous K cache or None
+            v_cache: Previous V cache or None
+
+        Returns:
+            output: (batch, seq_len, embedding_dim)
+            k_cache: Updated K cache
+            v_cache: Updated V cache
+        """
+        # TODO: Compute Q, K, V as before
+        # TODO: Reshape K, V to (batch, num_heads, seq_len, head_dim)
+        # TODO: If cache is None, initialize with current K, V
+        # TODO: If cache exists, concatenate current K, V to it (along seq dimension)
+        # TODO: Compute attention using cached K, V
+        # TODO: Reshape and apply output projection
+
+        return output, k_cache, v_cache
+
+
+# ===== Test Code =====
+if __name__ == "__main__":
+    embedding_dim = 512
+    num_heads = 8
+    seq_len = 10
+    batch_size = 2
+
+    # Test 1: Multi-head attention
+    mha = MultiHeadAttentionFromScratch(embedding_dim, num_heads)
+    x = torch.randn(batch_size, seq_len, embedding_dim)
+    output = mha(x)
+
+    assert output.shape == (batch_size, seq_len, embedding_dim)
+
+    # Test 2: With causal mask
+    mask = torch.tril(torch.ones(seq_len, seq_len))
+    output_masked = mha(x, mask=mask)
+    assert output_masked.shape == (batch_size, seq_len, embedding_dim)
+
+    # Test 3: KV cache
+    attn_cache = AttentionWithKVCacheFromScratch(embedding_dim, num_heads)
+
+    # Simulate inference: 5 generation steps
+    k_cache = None
+    v_cache = None
+    for step in range(5):
+        x_new = torch.randn(batch_size, 1, embedding_dim)
+        output, k_cache, v_cache = attn_cache(x_new, k_cache, v_cache)
+
+        assert output.shape == (batch_size, 1, embedding_dim)
+        assert k_cache.shape == (batch_size, num_heads, step + 1, embedding_dim // num_heads)
+        assert v_cache.shape == (batch_size, num_heads, step + 1, embedding_dim // num_heads)
+
+    print("✓ All tests passed!")
+      `,
+      solution: `
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import math
+from typing import Optional, Tuple
+
+class MultiHeadAttentionFromScratch(nn.Module):
+    def __init__(self, embedding_dim, num_heads=8):
+        super().__init__()
+        assert embedding_dim % num_heads == 0
+
+        self.embedding_dim = embedding_dim
+        self.num_heads = num_heads
+        self.head_dim = embedding_dim // num_heads
+
+        self.W_q = nn.Linear(embedding_dim, embedding_dim)
+        self.W_k = nn.Linear(embedding_dim, embedding_dim)
+        self.W_v = nn.Linear(embedding_dim, embedding_dim)
+        self.W_o = nn.Linear(embedding_dim, embedding_dim)
+
+        self.scale = 1.0 / math.sqrt(self.head_dim)
+
+    def forward(self, x, mask=None):
+        batch_size, seq_len, _ = x.shape
+
+        # Project
+        Q = self.W_q(x)  # (batch, seq_len, embedding_dim)
+        K = self.W_k(x)
+        V = self.W_v(x)
+
+        # Reshape and transpose for multi-head
+        Q = Q.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
+        K = K.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
+        V = V.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
+        # All now: (batch, num_heads, seq_len, head_dim)
+
+        # Compute attention
+        scores = torch.matmul(Q, K.transpose(-2, -1)) * self.scale
+
+        if mask is not None:
+            mask = mask.unsqueeze(0).unsqueeze(0)
+            scores = scores.masked_fill(mask == 0, float('-inf'))
+
+        weights = F.softmax(scores, dim=-1)
+        weights = torch.nan_to_num(weights, 0.0)
+
+        # Aggregate values
+        head_outputs = torch.matmul(weights, V)  # (batch, num_heads, seq_len, head_dim)
+
+        # Reshape back
+        head_outputs = head_outputs.transpose(1, 2).contiguous()  # (batch, seq_len, num_heads, head_dim)
+        concatenated = head_outputs.view(batch_size, seq_len, self.embedding_dim)
+
+        output = self.W_o(concatenated)
+        return output
+
+
+class AttentionWithKVCacheFromScratch(nn.Module):
+    def __init__(self, embedding_dim, num_heads=8):
+        super().__init__()
+        assert embedding_dim % num_heads == 0
+
+        self.embedding_dim = embedding_dim
+        self.num_heads = num_heads
+        self.head_dim = embedding_dim // num_heads
+
+        self.W_q = nn.Linear(embedding_dim, embedding_dim)
+        self.W_k = nn.Linear(embedding_dim, embedding_dim)
+        self.W_v = nn.Linear(embedding_dim, embedding_dim)
+        self.W_o = nn.Linear(embedding_dim, embedding_dim)
+
+        self.scale = 1.0 / math.sqrt(self.head_dim)
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        k_cache: Optional[torch.Tensor] = None,
+        v_cache: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        batch_size, seq_len, _ = x.shape
+
+        Q = self.W_q(x)
+        K = self.W_k(x)
+        V = self.W_v(x)
+
+        Q = Q.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
+        K = K.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
+        V = V.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
+
+        if k_cache is None:
+            k_cache = K
+            v_cache = V
+        else:
+            k_cache = torch.cat([k_cache, K], dim=2)
+            v_cache = torch.cat([v_cache, V], dim=2)
+
+        scores = torch.matmul(Q, k_cache.transpose(-2, -1)) * self.scale
+        weights = F.softmax(scores, dim=-1)
+
+        head_outputs = torch.matmul(weights, v_cache)
+        head_outputs = head_outputs.transpose(1, 2).contiguous()
+        concatenated = head_outputs.view(batch_size, seq_len, self.embedding_dim)
+
+        output = self.W_o(concatenated)
+        return output, k_cache, v_cache
+      `
+    }
+  },
+
+  {
+    id: 'tiny-transformer',
+    title: 'Build a Tiny Transformer',
+    description: 'Implement a complete transformer model from scratch. Build a nanoGPT-style architecture, understand the full forward pass from tokenization through training to text generation. This brings together all previous concepts into a working language model.',
+    sections: [
+      {
+        title: 'Full Transformer Architecture',
+        content: `
+## Complete Transformer: From Tokens to Text
+
+We now assemble all components into a complete transformer capable of training on text data and generating coherent samples.
+
+### Model Architecture Overview
+
+A minimal but functional transformer consists of:
+
+1. **Embedding Layer**: Token ID → dense vector
+2. **Positional Embedding**: Add position information
+3. **Stack of Transformer Blocks** (N layers):
+   - Layer normalization
+   - Multi-head self-attention
+   - Residual connection
+   - Layer normalization
+   - Feed-forward network (2 linear layers)
+   - Residual connection
+4. **Output Projection**: Embedding dimension → vocabulary size
+5. **Softmax**: Probabilities for next token
+
+### Pre-Norm vs Post-Norm
+
+Modern models use **pre-norm** (GPT-2 style):
+\`\`\`
+x → LayerNorm → Attention → + → LayerNorm → MLP → +
+\`\`\`
+
+Original Transformer used **post-norm** (harder to train):
+\`\`\`
+x → Attention → LayerNorm → + → MLP → LayerNorm → +
+\`\`\`
+
+Pre-norm is better because:
+- Gradients flow directly through skip connections without normalization
+- Enables training of deeper networks
+- Reaches better final performance
+
+### Residual Connections: The Key to Deep Networks
+
+Residual connections are: y = x + f(x)
+
+**Why essential**:
+1. **Gradient highways**: Gradients bypass nonlinearities, reaching early layers
+2. **Identity shortcut**: Without learning, network defaults to identity transformation
+3. **Deep learning**: Without residuals, networks > 50 layers fail completely
+4. **Information flow**: Allows addition of information at multiple levels
+
+Residuals enable 100+ layer networks that actually train effectively.
+
+### Feed-Forward Network
+
+The MLP between attention layers is surprisingly important:
+\`\`\`
+MLP(x) = ReLU(x @ W_1 + b_1) @ W_2 + b_2
+\`\`\`
+
+With W_1 ∈ ℝ^(d × 4d) and W_2 ∈ ℝ^(4d × d)
+
+**Why expansion factor 4**:
+- Empirically found to work well
+- Adds non-linearity (ReLU) for expressiveness
+- Similar to older neural network designs
+- Modern models sometimes use other multipliers (8× for small models)
+
+### Full Forward Pass
+
+For input token IDs (batch=2, seq_len=10, vocab_size=10000):
+
+1. **Tokenize**: Convert text → token IDs
+2. **Embed**: (2, 10) → (2, 10, d_model)
+3. **Add positions**: (2, 10, d_model) + (10, d_model) → (2, 10, d_model)
+4. **Transformer stack** (each block):
+   - LayerNorm: (2, 10, d) → (2, 10, d)
+   - Attention: (2, 10, d) → (2, 10, d)
+   - Add residual: (2, 10, d)
+   - LayerNorm: (2, 10, d) → (2, 10, d)
+   - MLP: (2, 10, d) → (2, 10, d)
+   - Add residual: (2, 10, d)
+5. **Output head**: (2, 10, d) → (2, 10, vocab_size)
+6. **Loss**: Cross-entropy between predictions and targets
+
+### Training vs Inference
+
+**Training**:
+- Process full sequences at once
+- Compute loss on all positions
+- Use causal masking to prevent looking ahead
+
+**Inference** (generation):
+- Start with seed tokens
+- Generate one token at a time
+- Use KV cache for efficiency
+- Sample or argmax to get next token
+- Append to sequence, repeat
+
+### Scaling Laws
+
+Empirical observation (Kaplan et al.): Loss scales as:
+
+Loss ≈ N^(-α)
+
+where N is number of parameters and α ≈ 0.07
+
+This means:
+- 10× more parameters → ~1.7× better (lower) loss
+- To reach target quality, you need predictably more parameters
+- Performance improvement is smooth, not sudden
+
+Understanding scaling laws helps predict how much compute you need.
+
+### Modern Variations
+
+Different architectures modify this blueprint:
+- **ALiBi**: Replace positional embeddings with attention bias
+- **Rotary Position Embeddings (RoPE)**: Rotate Q and K for position
+- **LayerNorm variants**: RMSNorm is faster and equally effective
+- **Activation functions**: SwiGLU, GLU instead of ReLU
+- **Attention variants**: Multi-Query, Grouped-Query for efficiency
+
+The core ideas (attention, residuals, normalization) remain constant.
+
+## Common Pitfalls
+
+1. **Forgetting causal masking during training**: Model will overfit by looking ahead
+2. **Wrong loss computation**: Must mask padding tokens in loss
+3. **Not using dropout**: Overfitting is severe without it
+4. **Incorrect gradient clipping**: Can limit learning or create instability
+5. **Poor learning rate**: Transformers are sensitive to learning rate schedule
+6. **Temperature in generation**: Too high = incoherent, too low = repetitive
+7. **Not validating on clean data**: Makes it hard to detect overfitting
+        `,
+        code: `
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import math
+
+class TransformerBlock(nn.Module):
+    """Single transformer block: attention + MLP with pre-norm and residuals"""
+    def __init__(self, embed_dim, num_heads=8, mlp_ratio=4, dropout=0.1):
+        super().__init__()
+
+        # Attention block
+        self.norm1 = nn.LayerNorm(embed_dim)
+        self.attention = nn.MultiheadAttention(
+            embed_dim, num_heads, dropout=dropout, batch_first=True
+        )
+
+        # MLP block
+        self.norm2 = nn.LayerNorm(embed_dim)
+        mlp_hidden = int(embed_dim * mlp_ratio)
+        self.mlp = nn.Sequential(
+            nn.Linear(embed_dim, mlp_hidden),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(mlp_hidden, embed_dim),
+            nn.Dropout(dropout),
+        )
+
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, x, mask=None):
+        """
+        Args:
+            x: (batch, seq_len, embed_dim)
+            mask: (seq_len, seq_len) causal mask or None
+
+        Returns:
+            output: (batch, seq_len, embed_dim)
+        """
+        # Pre-norm residual: LayerNorm → Attention → Add
+        attn_output, _ = self.attention(
+            self.norm1(x), self.norm1(x), self.norm1(x),
+            attn_mask=mask
+        )
+        x = x + self.dropout(attn_output)
+
+        # Pre-norm residual: LayerNorm → MLP → Add
+        mlp_output = self.mlp(self.norm2(x))
+        x = x + self.dropout(mlp_output)
+
+        return x
+
+
+class NanoGPT(nn.Module):
+    """Minimal but complete transformer language model (GPT-style)"""
+    def __init__(
+        self,
+        vocab_size,
+        embed_dim=384,
+        num_layers=6,
+        num_heads=8,
+        context_length=256,
+        dropout=0.1,
+    ):
+        super().__init__()
+
+        self.vocab_size = vocab_size
+        self.embed_dim = embed_dim
+        self.context_length = context_length
+
+        # Embeddings
+        self.token_embedding = nn.Embedding(vocab_size, embed_dim)
+        self.position_embedding = nn.Embedding(context_length, embed_dim)
+        self.embedding_dropout = nn.Dropout(dropout)
+
+        # Transformer blocks
+        self.transformer_blocks = nn.ModuleList([
+            TransformerBlock(embed_dim, num_heads, mlp_ratio=4, dropout=dropout)
+            for _ in range(num_layers)
+        ])
+
+        # Output
+        self.final_norm = nn.LayerNorm(embed_dim)
+        self.output_head = nn.Linear(embed_dim, vocab_size)
+
+        # Register causal mask as buffer
+        self.register_buffer(
+            "causal_mask",
+            torch.tril(torch.ones(context_length, context_length))
+        )
+
+    def forward(self, token_ids, targets=None):
+        """
+        Args:
+            token_ids: (batch, seq_len) with token indices
+            targets: (batch, seq_len) with target token indices for loss
+
+        Returns:
+            logits: (batch, seq_len, vocab_size)
+            loss: scalar if targets provided, None otherwise
+        """
+        batch_size, seq_len = token_ids.shape
+
+        # Embeddings
+        token_embeddings = self.token_embedding(token_ids)  # (batch, seq_len, embed_dim)
+        positions = torch.arange(seq_len, device=token_ids.device, dtype=torch.long)
+        position_embeddings = self.position_embedding(positions)  # (seq_len, embed_dim)
+
+        # Combine embeddings
+        x = token_embeddings + position_embeddings  # Broadcasting: (batch, seq_len, embed_dim)
+        x = self.embedding_dropout(x)
+
+        # Get causal mask for this sequence length
+        mask = self.causal_mask[:seq_len, :seq_len]
+        mask = mask.unsqueeze(0)  # (1, seq_len, seq_len)
+
+        # Pass through transformer blocks
+        for block in self.transformer_blocks:
+            x = block(x, mask=mask)
+
+        # Output projection
+        x = self.final_norm(x)
+        logits = self.output_head(x)  # (batch, seq_len, vocab_size)
+
+        # Compute loss if targets provided
+        loss = None
+        if targets is not None:
+            # Reshape for cross-entropy: (batch * seq_len, vocab_size) and (batch * seq_len)
+            logits_flat = logits.view(-1, self.vocab_size)
+            targets_flat = targets.view(-1)
+            loss = F.cross_entropy(logits_flat, targets_flat)
+
+        return logits, loss
+
+    def generate(self, seed_tokens, max_new_tokens=100, temperature=1.0, top_k=None):
+        """
+        Generate new tokens given seed.
+
+        Args:
+            seed_tokens: (batch, seq_len) initial token IDs
+            max_new_tokens: How many tokens to generate
+            temperature: Softmax temperature (lower = more deterministic)
+            top_k: If provided, sample from top k logits only
+
+        Returns:
+            generated: (batch, seq_len + max_new_tokens)
+        """
+        self.eval()
+        generated = seed_tokens.clone()
+
+        with torch.no_grad():
+            for _ in range(max_new_tokens):
+                # Only feed last context_length tokens
+                context = generated[:, -self.context_length:]
+
+                # Get logits for next token
+                logits, _ = self(context)
+
+                # Take last position logits
+                next_logits = logits[:, -1, :] / temperature
+
+                # Top-k sampling
+                if top_k is not None:
+                    top_logits, top_indices = torch.topk(next_logits, top_k, dim=-1)
+                    next_logits_filtered = torch.full_like(next_logits, float('-inf'))
+                    next_logits_filtered.scatter_(1, top_indices, top_logits)
+                    next_logits = next_logits_filtered
+
+                # Sample
+                probs = F.softmax(next_logits, dim=-1)
+                next_token = torch.multinomial(probs, num_samples=1)
+
+                generated = torch.cat([generated, next_token], dim=1)
+
+        return generated
+
+
+# ===== Example Usage =====
+
+vocab_size = 256  # Character-level model
+context_length = 64
+embed_dim = 128
+num_layers = 4
+
+model = NanoGPT(
+    vocab_size=vocab_size,
+    embed_dim=embed_dim,
+    num_layers=num_layers,
+    context_length=context_length,
+)
+
+# Create dummy data
+batch_size = 4
+seq_len = 32
+token_ids = torch.randint(0, vocab_size, (batch_size, seq_len))
+targets = torch.randint(0, vocab_size, (batch_size, seq_len))
+
+# Forward pass with loss
+logits, loss = model(token_ids, targets)
+print(f"Logits shape: {logits.shape}")  # (4, 32, 256)
+print(f"Loss: {loss.item():.4f}")
+
+# Generation
+seed = torch.zeros((1, 1), dtype=torch.long)
+generated = model.generate(seed, max_new_tokens=50, temperature=0.8)
+print(f"\\nGenerated shape: {generated.shape}")  # (1, 51)
+
+# Verify gradients
+loss.backward()
+print(f"✓ Model trained, gradients flowing")
+print(f"Total parameters: {sum(p.numel() for p in model.parameters()):,}")
+        `,
+        references: [
+          {
+            title: 'Attention Is All You Need (Vaswani et al., 2017)',
+            url: 'https://arxiv.org/abs/1706.03762'
+          },
+          {
+            title: 'Language Models are Unsupervised Multitask Learners (GPT-2)',
+            url: 'https://d4mucfpksywv.cloudfront.net/better-language-models/language_models_are_unsupervised_multitask_learners.pdf'
+          },
+          {
+            title: 'Scaling Laws for Neural Language Models (Kaplan et al.)',
+            url: 'https://arxiv.org/abs/2001.08361'
+          },
+          {
+            title: 'nanoGPT GitHub (Karpathy)',
+            url: 'https://github.com/karpathy/nanoGPT'
+          }
+        ]
+      }
+    ],
+    quiz: [
+      {
+        question: 'What is the purpose of pre-norm in modern transformer architectures?',
+        options: [
+          'To reduce parameter count',
+          'To normalize input before passing to attention/MLP, enabling better gradient flow through residual connections',
+          'To increase training speed',
+          'To prevent overfitting'
+        ],
+        correct: 1,
+        explanation: 'Pre-norm (LayerNorm before the sublayer, then add residual) allows gradients to flow directly through skip connections without passing through normalization. This stabilizes training of deeper networks compared to post-norm.'
+      },
+      {
+        question: 'Why are residual connections (y = x + f(x)) essential in transformers?',
+        options: [
+          'They reduce the number of parameters',
+          'They provide gradient highways and allow very deep networks to train effectively',
+          'They speed up computation',
+          'They improve the final accuracy'
+        ],
+        correct: 1,
+        explanation: 'Residual connections enable gradients to bypass nonlinearities, reaching early layers directly. Without them, deep networks (>50 layers) fail to train. With residuals, we can train 100+ layer networks effectively.'
+      },
+      {
+        question: 'In the feed-forward network within each block, what is the purpose of the expansion from d to 4d?',
+        options: [
+          'To reduce memory usage',
+          'To add non-linearity and expressiveness through a wider hidden layer',
+          'To match the attention computation',
+          'To compute attention heads'
+        ],
+        correct: 1,
+        explanation: 'The MLP expands from embedding dimension d to 4d (or another factor), applies ReLU for non-linearity, then projects back to d. This bottleneck architecture adds expressiveness without prohibitive cost. The factor 4 is empirical; modern models use various factors.'
+      },
+      {
+        question: 'What is the main difference between training and inference for autoregressive generation?',
+        options: [
+          'Training uses all examples, inference uses only one',
+          'Training processes full sequences at once with causal masking; inference generates one token at a time using KV cache',
+          'Inference is faster because it uses simpler computations',
+          'Training requires more memory'
+        ],
+        correct: 1,
+        explanation: 'During training, we process full sequences and compute loss on all positions. During inference, we generate one token per step (feeding it back as input), using KV cache to avoid recomputing keys and values.'
+      },
+      {
+        question: 'How does temperature affect text generation?',
+        options: [
+          'Temperature does not affect generation quality',
+          'Higher temperature = more random/diverse; Lower temperature = more deterministic/repetitive',
+          'Higher temperature = more deterministic; Lower temperature = more random',
+          'Temperature only affects decoding speed'
+        ],
+        correct: 1,
+        explanation: 'Temperature scales the logits before softmax. T=1 is standard. T>1 flattens logits (more uniform distribution, more random). T<1 sharpens logits (higher prob for top choices, more deterministic).'
+      },
+      {
+        question: 'What is the purpose of dropout in transformers?',
+        options: [
+          'To reduce model size',
+          'To speed up training',
+          'To regularize and prevent overfitting by randomly zeroing activations',
+          'To improve inference speed'
+        ],
+        correct: 2,
+        explanation: 'Dropout randomly zeros activations during training with probability p, regularizing the model and preventing overfitting. This forces the network to learn redundant representations. It is disabled during inference.'
+      }
+    ],
+    exercise: {
+      title: 'Train a Tiny Transformer on Text',
+      description: 'Implement a complete NanoGPT model and train it on character-level or token-level text. You must: (1) build the full transformer architecture, (2) create a simple tokenizer, (3) implement training loop with gradient clipping, (4) track train/val loss, (5) generate text samples during training. Train on a small dataset until generating coherent output. This brings together all previous concepts.',
+      starterCode: `
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.utils.data import Dataset, DataLoader
+import math
+
+class CharacterDataset(Dataset):
+    """Character-level dataset for language modeling"""
+    def __init__(self, text, context_length=64):
+        # TODO: Build character vocabulary (unique chars in text)
+        # TODO: Create char_to_idx and idx_to_char mappings
+        # TODO: Encode entire text to token IDs
+        # TODO: Create (input, target) pairs where target is input shifted by 1
+        pass
+
+    def __len__(self):
+        # TODO: Return number of training examples
+        pass
+
+    def __getitem__(self, idx):
+        # TODO: Return (token_ids, targets) for this index
+        pass
+
+    def decode(self, token_ids):
+        # TODO: Convert token IDs back to text using idx_to_char
+        pass
+
+
+class NanoGPT(nn.Module):
+    """Transformer language model (GPT-style, minimal but complete)"""
+    def __init__(self, vocab_size, embed_dim=128, num_layers=3, context_length=64):
+        super().__init__()
+
+        # TODO: Create token embedding
+        # TODO: Create positional embedding
+        # TODO: Create stack of transformer blocks
+        # TODO: Create output projection from embed_dim to vocab_size
+        # TODO: Register causal mask as buffer
+        pass
+
+    def forward(self, token_ids, targets=None):
+        # TODO: Embed tokens and positions
+        # TODO: Add positional embeddings to token embeddings
+        # TODO: Pass through transformer blocks with causal mask
+        # TODO: Project to vocabulary size
+        # TODO: Compute cross-entropy loss if targets provided
+        pass
+
+    def generate(self, seed_tokens, max_new_tokens=100, temperature=1.0):
+        # TODO: Generate new tokens one at a time
+        # TODO: Use KV cache or just feed growing sequence
+        # TODO: Apply temperature to logits before softmax
+        # TODO: Sample next token from softmax distribution
+        # TODO: Append to sequence and repeat
+        pass
+
+
+def train():
+    # TODO: Load or create text data
+    # TODO: Create CharacterDataset
+    # TODO: Create DataLoader
+    # TODO: Create NanoGPT model
+    # TODO: Create optimizer (Adam)
+    # TODO: Training loop:
+    #   - For each epoch:
+    #     - For each batch:
+    #       - Forward pass with targets
+    #       - Backward pass
+    #       - Gradient clipping
+    #       - Optimizer step
+    #   - Print loss
+    #   - Validate on separate set
+    #   - Generate sample text
+    # TODO: Return trained model
+    pass
+
+
+if __name__ == "__main__":
+    model = train()
+    print("✓ Training complete!")
+      `,
+      solution: `
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.utils.data import Dataset, DataLoader
+import math
+
+class CharacterDataset(Dataset):
+    def __init__(self, text, context_length=64):
+        self.context_length = context_length
+
+        # Build vocabulary
+        self.chars = sorted(list(set(text)))
+        self.vocab_size = len(self.chars)
+        self.char_to_idx = {c: i for i, c in enumerate(self.chars)}
+        self.idx_to_char = {i: c for i, c in enumerate(self.chars)}
+
+        # Encode text
+        self.data = torch.tensor([self.char_to_idx[c] for c in text], dtype=torch.long)
+
+    def __len__(self):
+        return len(self.data) - self.context_length
+
+    def __getitem__(self, idx):
+        context = self.data[idx:idx + self.context_length]
+        target = self.data[idx + 1:idx + self.context_length + 1]
+        return context, target
+
+    def decode(self, token_ids):
+        return ''.join([self.idx_to_char[int(t)] for t in token_ids])
+
+
+class TransformerBlock(nn.Module):
+    def __init__(self, embed_dim, num_heads=4, dropout=0.1):
+        super().__init__()
+        self.norm1 = nn.LayerNorm(embed_dim)
+        self.attention = nn.MultiheadAttention(
+            embed_dim, num_heads, dropout=dropout, batch_first=True
+        )
+        self.norm2 = nn.LayerNorm(embed_dim)
+        self.mlp = nn.Sequential(
+            nn.Linear(embed_dim, 4 * embed_dim),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(4 * embed_dim, embed_dim),
+            nn.Dropout(dropout),
+        )
+
+    def forward(self, x, mask=None):
+        x_norm = self.norm1(x)
+        attn, _ = self.attention(x_norm, x_norm, x_norm, attn_mask=mask)
+        x = x + attn
+
+        x_norm = self.norm2(x)
+        mlp = self.mlp(x_norm)
+        x = x + mlp
+
+        return x
+
+
+class NanoGPT(nn.Module):
+    def __init__(self, vocab_size, embed_dim=128, num_layers=3, context_length=64):
+        super().__init__()
+        self.vocab_size = vocab_size
+        self.embed_dim = embed_dim
+        self.context_length = context_length
+
+        self.token_embedding = nn.Embedding(vocab_size, embed_dim)
+        self.position_embedding = nn.Embedding(context_length, embed_dim)
+
+        self.blocks = nn.ModuleList([
+            TransformerBlock(embed_dim) for _ in range(num_layers)
+        ])
+
+        self.final_norm = nn.LayerNorm(embed_dim)
+        self.output_head = nn.Linear(embed_dim, vocab_size)
+
+        self.register_buffer("causal_mask", torch.tril(torch.ones(context_length, context_length)))
+
+    def forward(self, token_ids, targets=None):
+        batch_size, seq_len = token_ids.shape
+
+        token_emb = self.token_embedding(token_ids)
+        positions = torch.arange(seq_len, device=token_ids.device)
+        pos_emb = self.position_embedding(positions)
+
+        x = token_emb + pos_emb
+
+        mask = self.causal_mask[:seq_len, :seq_len].unsqueeze(0)
+
+        for block in self.blocks:
+            x = block(x, mask=mask)
+
+        x = self.final_norm(x)
+        logits = self.output_head(x)
+
+        loss = None
+        if targets is not None:
+            loss = F.cross_entropy(logits.view(-1, self.vocab_size), targets.view(-1))
+
+        return logits, loss
+
+    def generate(self, seed, max_tokens=100, temperature=1.0):
+        self.eval()
+        generated = seed.clone()
+
+        with torch.no_grad():
+            for _ in range(max_tokens):
+                context = generated[:, -self.context_length:]
+                logits, _ = self(context)
+
+                next_logits = logits[:, -1, :] / temperature
+                probs = F.softmax(next_logits, dim=-1)
+                next_token = torch.multinomial(probs, 1)
+
+                generated = torch.cat([generated, next_token], dim=1)
+
+        return generated
+
+
+def train():
+    text = "The quick brown fox jumps over the lazy dog. " * 100
+    dataset = CharacterDataset(text, context_length=32)
+
+    train_size = int(0.8 * len(dataset))
+    val_size = len(dataset) - train_size
+    train_data, val_data = torch.utils.data.random_split(dataset, [train_size, val_size])
+
+    train_loader = DataLoader(train_data, batch_size=32, shuffle=True)
+    val_loader = DataLoader(val_data, batch_size=32)
+
+    model = NanoGPT(vocab_size=dataset.vocab_size, embed_dim=128, num_layers=3)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+
+    for epoch in range(10):
+        model.train()
+        train_loss = 0
+
+        for token_ids, targets in train_loader:
+            logits, loss = model(token_ids, targets)
+            optimizer.zero_grad()
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            optimizer.step()
+            train_loss += loss.item()
+
+        train_loss /= len(train_loader)
+
+        model.eval()
+        val_loss = 0
+        with torch.no_grad():
+            for token_ids, targets in val_loader:
+                _, loss = model(token_ids, targets)
+                val_loss += loss.item()
+        val_loss /= len(val_loader)
+
+        print(f"Epoch {epoch+1} | Train: {train_loss:.4f} | Val: {val_loss:.4f}")
+
+        if (epoch + 1) % 3 == 0:
+            seed = torch.zeros((1, 1), dtype=torch.long)
+            generated = model.generate(seed, max_tokens=50)
+            text_out = dataset.decode(generated[0])
+            print(f"Sample: {text_out}\\n")
+
+    return model
+      `
+    }
+  }
+];

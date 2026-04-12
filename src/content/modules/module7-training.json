@@ -1,0 +1,169 @@
+{
+  "id": "training-inference-details",
+  "title": "Training & Inference Details",
+  "description": "Master the numerical foundations of LLM training: loss functions, optimizers, normalization, precision, and sampling strategies. Understand why certain architectural choices matter for performance and stability.",
+  "sections": [
+    {
+      "title": "Cross-entropy Loss for Language Models",
+      "content": "Language modeling is classification: at each token position, predict the next token from a vocabulary of V possible tokens. The model outputs logits (unnormalized scores) for each position independently.\n\n**Why cross-entropy?** From first principles: maximum likelihood estimation. If we assume each position's prediction is independent, the log probability of a sequence is the sum of log probabilities of each token. Cross-entropy loss minimizes this sum: each position contributes -log(p_correct), directly measuring how confident the model is in the correct token.\n\n**Critical: F.cross_entropy expects logits, not probabilities.** Applying softmax twice corrupts the loss. PyTorch internally computes softmax + cross-entropy numerically stabilized (subtracts max logit for numerical stability). Never pass probs to cross_entropy.\n\n**Shape considerations:** Language models output (B, T, V): batch size, sequence length, vocabulary. But PyTorch's cross_entropy expects (N, C) = (batch_size, num_classes). You must reshape: (B*T, V) and flatten labels to (B*T,). PyTorch handles this—you can also reshape back to (B, T) for loss curves.\n\n**Label smoothing:** Real-world models use label smoothing (confidence regularization). Instead of one-hot labels, smooth toward uniform: label = (1 - ε) * one_hot + (ε/V) * uniform. Prevents overconfidence, improves generalization. PyTorch: loss_fn = nn.CrossEntropyLoss(label_smoothing=0.1).\n\n**Position-weighted loss:** For ranking/importance weighting (e.g., less weight on padding), use reduction='none' to get per-token loss, then apply weights before averaging. Common in machine translation.",
+      "code": "import torch\nimport torch.nn.functional as F\n\n# Simulate: B=2 batch, T=4 sequence length, V=10000 vocab\nB, T, V = 2, 4, 10000\nlogits = torch.randn(B, T, V)  # Model output\nlabels = torch.randint(0, V, (B, T))  # True next tokens\n\n# ❌ WRONG: F.cross_entropy(F.softmax(logits, dim=-1), labels)\n# ❌ WRONG: probs = F.softmax(logits, dim=-1); F.cross_entropy(probs, labels)\n\n# ✓ CORRECT: Flatten for cross_entropy\nlogits_flat = logits.view(B * T, V)\nlabels_flat = labels.view(B * T)\nloss = F.cross_entropy(logits_flat, labels_flat)\nprint(f\"Loss: {loss.item():.4f}\")\n\n# With label smoothing (built-in)\nloss_fn = torch.nn.CrossEntropyLoss(label_smoothing=0.1)\nloss_smooth = loss_fn(logits_flat, labels_flat)\n\n# Per-token loss (for weighted average or per-position analysis)\nloss_per_token = F.cross_entropy(logits_flat, labels_flat, reduction='none')\nprint(f\"Loss shape: {loss_per_token.shape}\")  # (B*T,)\nprint(f\"Mean: {loss_per_token.mean().item():.4f}\")\n\n# Example: Downweight padding tokens (assume 0 is padding index)\n# weights = (labels_flat != 0).float()\n# weighted_loss = (loss_per_token * weights).sum() / weights.sum()\n",
+      "references": [
+        {
+          "title": "Cross-entropy - Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/Cross_entropy"
+        },
+        {
+          "title": "PyTorch CrossEntropyLoss docs",
+          "url": "https://pytorch.org/docs/stable/generated/torch.nn.CrossEntropyLoss.html"
+        },
+        {
+          "title": "Label smoothing in deep networks (Szegedy et al., 2016)",
+          "url": "https://arxiv.org/abs/1512.00567"
+        }
+      ]
+    },
+    {
+      "title": "Optimizers: SGD, Adam, AdamW",
+      "content": "The optimizer family reveals a evolution in handling learning rate scheduling and per-parameter adaptation.\n\n**SGD (Stochastic Gradient Descent):** θ ← θ - η ∇L. Simple, but oscillates in high curvature directions. Learning rate is global—all parameters share it.\n\n**Momentum:** Accumulate gradient history: v ← β*v + ∇L, then θ ← θ - η*v. Dampens oscillation, accelerates convergence in consistent directions. β ≈ 0.9. Think: falling ball with friction.\n\n**Adam (Adaptive Moment Estimation):** Maintains two running averages per parameter: first moment m (mean) and second moment v (variance). m̂ ← β₁*m + (1-β₁)∇L, v̂ ← β₂*v + (1-β₂)∇L². Effective LR = η / (√v̂ + ε). Each parameter gets its own adaptive learning rate based on gradient variance. Dramatically improves convergence for nonconvex problems. β₁=0.9, β₂=0.999.\n\n**AdamW (Adam with Decoupled Weight Decay):** Pure L2 regularization in Adam is *not* equivalent to weight decay (they decouple at different β₂ values). AdamW applies weight decay directly: θ ← θ - η*v̂ / √v̂ - λ*θ. Crucial for vision+language models. Prevents collapse of learned features.\n\n**Parameter groups:** Different parameters need different treatment. Weights benefit from weight decay (regularization). Layer norm/bias terms should NOT be decayed (they're not the \"meat\" of the model). Example: decay weights, no decay on norm/bias parameters. Reduces generalization gap ~1-2%.\n\n**Learning rate schedules:**\n- Warmup: Linearly increase LR from 0 to peak over first ~10% of training. Prevents divergence in early unstable phases.\n- Cosine annealing: Decay LR as cos(π*t/(2*T)). Smooth, no hard restarts needed. Often followed by linear cool-down.\n- Often combined: warmup + cosine for 1 epoch, then optional second cycle with higher LR for fine-tuning.",
+      "code": "import torch\nimport torch.optim as optim\n\nmodel = torch.nn.Linear(10, 5)\n\n# AdamW with weight decay (recommended for LLMs)\noptimizer = optim.AdamW(model.parameters(), lr=1e-3, weight_decay=0.1)\n\n# Parameter groups: decay weights, no decay on bias/norm\ndecay = []\nno_decay = []\nfor name, param in model.named_parameters():\n    if 'weight' in name and param.dim() >= 2:\n        decay.append(param)\n    else:\n        no_decay.append(param)\n\noptimizer = optim.AdamW([\n    {'params': decay, 'weight_decay': 0.1},\n    {'params': no_decay, 'weight_decay': 0.0}\n], lr=1e-3)\n\n# Warmup + Cosine schedule\ndef get_scheduler(optimizer, warmup_steps, total_steps):\n    def lr_lambda(current_step):\n        if current_step < warmup_steps:\n            return float(current_step) / float(max(1, warmup_steps))\n        return max(0.0, float(total_steps - current_step) / float(max(1, total_steps - warmup_steps)))\n    return optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)\n\ntotal_steps = 1000\nwarmup_steps = 100\nscheduler = get_scheduler(optimizer, warmup_steps, total_steps)\n\n# Training loop\nfor step in range(total_steps):\n    loss = torch.randn(1, requires_grad=True)  # Dummy loss\n    optimizer.zero_grad()\n    loss.backward()\n    optimizer.step()\n    scheduler.step()\n    if step % 200 == 0:\n        print(f\"Step {step}, LR: {optimizer.param_groups[0]['lr']:.6f}\")\n\n# Inspect optimizer state\nprint(f\"Adam running averages for first param: {optimizer.state[model.weight]}\")\n",
+      "references": [
+        {
+          "title": "Adam: A Method for Stochastic Optimization (Kingma & Ba, 2014)",
+          "url": "https://arxiv.org/abs/1412.6980"
+        },
+        {
+          "title": "Decoupled Weight Decay Regularization (Loshchilov & Hutter, 2019)",
+          "url": "https://arxiv.org/abs/1711.05101"
+        },
+        {
+          "title": "Warmup learning rate schedules for LLMs",
+          "url": "https://arxiv.org/abs/1910.04209"
+        }
+      ]
+    },
+    {
+      "title": "LayerNorm, Residuals, GELU",
+      "content": "Three architectural components that stabilize deep networks and enable training of 100+ layer models.\n\n**Residual Connections (Skip Connections):** Instead of y = F(x), use y = x + F(x). The identity path provides a direct gradient flow route (backprop gets ∂L/∂x without passing through F). This prevents vanishing gradients and allows networks to learn *changes* rather than full representations. In deep Transformers, every block uses: y = x + Attention(LayerNorm(x)); z = y + FFN(LayerNorm(y)).\n\n**LayerNorm vs BatchNorm:** BatchNorm normalizes across the batch: each feature has mean 0, std 1 over the batch dimension. Problem at inference: batch statistics differ from training. LayerNorm normalizes across feature dimension (embedding size): each sequence token independently gets normalized. No train/test mismatch, stable at inference and with variable batch sizes. For sequences, LayerNorm is applied per token: shape (B, T, D) → normalized per (D,) independently for each position.\n\n**Pre-norm vs Post-norm:**\n- Post-norm: y = x + F(LayerNorm(x)). Output of block is normalized.\n- Pre-norm: y = x + F(LayerNorm(x)). Input to block is normalized (more stable, easier to train deep nets).\nMost modern models use pre-norm. The key insight: normalizing before the nonlinearity stabilizes activations.\n\n**GELU (Gaussian Error Linear Unit):** ReLU clips negative values to 0 (information loss). GELU(x) = x * Φ(x), where Φ is the Gaussian CDF. Smooth interpolation—negative values are gently suppressed rather than zeroed. Learned to help: allows gradients through \"suppressed\" dimensions. Slightly more computation than ReLU but worth it for LLMs.",
+      "code": "import torch\nimport torch.nn as nn\n\nB, T, D = 2, 4, 64  # Batch, sequence length, embedding dim\n\nx = torch.randn(B, T, D)\n\n# LayerNorm: normalize over feature dimension\nln = nn.LayerNorm(D)\nx_norm = ln(x)\nprint(f\"Input mean: {x.mean(dim=-1)[0, 0].item():.4f}\")  # Variable\nprint(f\"After LayerNorm mean: {x_norm.mean(dim=-1)[0, 0].item():.6f}\")  # ~0\nprint(f\"After LayerNorm std: {x_norm.std(dim=-1)[0, 0].item():.4f}\")  # ~1\n\n# Residual connection\ndef residual_block(x, fn):\n    return x + fn(x)\n\n# Pre-norm (modern convention)\ndef transformer_block(x, attn_fn, ffn_fn):\n    ln1 = nn.LayerNorm(D)\n    ln2 = nn.LayerNorm(D)\n    x = x + attn_fn(ln1(x))\n    x = x + ffn_fn(ln2(x))\n    return x\n\n# GELU activation\ngelu = nn.GELU(approximate='tanh')  # 'tanh' for efficiency, 'none' for exact\nx_gelu = gelu(x)\nprint(f\"GELU allows gradients through negative values (smooth)\")\n\n# Combining all three\nclass ModernBlock(nn.Module):\n    def __init__(self, d_model, d_ff):\n        super().__init__()\n        self.ln1 = nn.LayerNorm(d_model)\n        self.ln2 = nn.LayerNorm(d_model)\n        self.attn = nn.MultiheadAttention(d_model, num_heads=4, batch_first=True)\n        self.ffn = nn.Sequential(\n            nn.Linear(d_model, d_ff),\n            nn.GELU(),\n            nn.Linear(d_ff, d_model)\n        )\n\n    def forward(self, x):\n        # Pre-norm + Residual\n        x = x + self.attn(self.ln1(x), self.ln1(x), self.ln1(x))[0]\n        x = x + self.ffn(self.ln2(x))\n        return x\n\nblock = ModernBlock(D, d_ff=256)\noutput = block(x)\nprint(f\"Output shape: {output.shape}\")\n",
+      "references": [
+        {
+          "title": "Layer Normalization (Ba et al., 2016)",
+          "url": "https://arxiv.org/abs/1607.06450"
+        },
+        {
+          "title": "Deep Residual Learning (He et al., 2015)",
+          "url": "https://arxiv.org/abs/1512.03385"
+        },
+        {
+          "title": "GELU: Gaussian Error Linear Units (Hendrycks & Gimpel, 2016)",
+          "url": "https://arxiv.org/abs/1606.08415"
+        },
+        {
+          "title": "On Layer Normalization in the Transformer Architecture (Xiong et al., 2020)",
+          "url": "https://arxiv.org/abs/2002.04745"
+        }
+      ]
+    },
+    {
+      "title": "Mixed Precision on MPS",
+      "content": "GPU memory is the bottleneck at scale. Precision reduction trades a small accuracy loss for 2-4x memory savings and faster compute.\n\n**Precision tradeoffs:**\n- fp32 (float32): 32-bit, gold standard. Safe but memory-heavy.\n- fp16 (float16): 16-bit, half the memory. Problem: limited range (max ~65K), can overflow/underflow in intermediate gradients. Loss scaling (multiply loss by 1000x, then divide gradients) mitigates underflow.\n- bf16 (bfloat16): 16-bit like fp16, but larger exponent range (matches fp32's range). Safer for gradients, easier to use. Smaller mantissa = slightly less precision, but often negligible for LLMs.\n\n**Mixed precision strategy (common for MPS on Apple Silicon):**\n1. Master weights in fp32 (optimizer state, historical momentum).\n2. Forward/backward in bf16 (compute-heavy parts).\n3. Gradient update back to fp32 weights.\n\nPyTorch's autocast context manager handles this automatically: casts ops to lower precision where safe, keeps numerically sensitive ops (reductions, norms) in higher precision.\n\n**Why bf16 on MPS?** Apple Silicon (M-series) has poor fp16 support. bf16 is efficient and avoids the stability issues of fp16. Llama, Mistral, and modern models train on bf16 by default.\n\n**When to use each:**\n- Development/prototyping: fp32 (fewer surprises).\n- Production on H100/A100 (NVIDIA): mixed fp16 (mature infrastructure, tensor cores optimized for fp16).\n- Apple Silicon (MPS): bf16 or mixed bf16 (native support).\n- Mobile/edge: fp16 or int8 (quantization).\n\n**Why This Matters:** Memory is often the bottleneck at scale. Mixed precision unlocks 2-4x larger models on the same hardware. The accuracy drop is negligible for LLMs; you're leaving performance on the table by not using it.\n\n**Common Pitfalls:**\n- Not using loss scaling with fp16—gradients underflow silently, training stalls\n- Keeping all parameters in high precision (defeats the purpose)—master weights only\n- Mixing fp16 and bf16 in the same model—different numeric ranges cause issues\n- Assuming fp16 works everywhere—it doesn't (Apple Silicon, old GPUs often fail)\n- Forgetting to test on target hardware—fp32 tests pass, bf16 mysteriously diverges on MPS",
+      "code": "import torch\nimport torch.nn as nn\n\n# Model setup\nmodel = nn.TransformerEncoderLayer(\n    d_model=512, nhead=8, dim_feedforward=2048, batch_first=True\n)\noptimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)\n\nx = torch.randn(4, 10, 512)  # (batch, seq_len, embedding_dim)\ntarget = torch.randn(4, 10, 512)\n\n# ✓ Mixed precision with autocast (recommended for MPS)\nscaler = torch.cuda.amp.GradScaler() if torch.cuda.is_available() else None\ndevice = torch.device('mps' if torch.backends.mps.is_available() else 'cpu')\nmodel = model.to(device)\nx, target = x.to(device), target.to(device)\n\n# Training step with autocast\nwith torch.autocast(device_type=device.type, dtype=torch.bfloat16):\n    output = model(x)\n    loss = nn.MSELoss()(output, target)\n\noptimizer.zero_grad()\nloss.backward()\noptimizer.step()\n\nprint(f\"Loss (bf16): {loss.item():.4f}\")\nprint(f\"Master weights dtype: {next(model.parameters()).dtype}\")  # Should be fp32\n\n# Explicit bf16 casting for MPS\nwith torch.autocast('mps', dtype=torch.bfloat16):\n    output = model(x)\n    loss = nn.MSELoss()(output, target)\n\n# Manual mixed precision (if needed for custom logic)\nmodel = model.to(torch.float32)  # Keep master weights fp32\nx_bf16 = x.to(torch.bfloat16)\nwith torch.no_grad():\n    output = model(x_bf16.to(torch.float32))\n    # Explicit cast where needed\nprint(\"Manual mixed precision for edge cases\")\n\n# Check memory savings\nprint(f\"fp32 size: {sum(p.numel() for p in model.parameters()) * 4 / 1e6:.2f} MB\")\nprint(f\"bf16 equivalent: {sum(p.numel() for p in model.parameters()) * 2 / 1e6:.2f} MB\")\n",
+      "references": [
+        {
+          "title": "Mixed Precision Training (Micikevicius et al., 2017)",
+          "url": "https://arxiv.org/abs/1710.03740"
+        },
+        {
+          "title": "PyTorch Automatic Mixed Precision",
+          "url": "https://pytorch.org/docs/stable/amp.html"
+        },
+        {
+          "title": "bfloat16: The Secret To High Performance on Cloud TPUs",
+          "url": "https://cloud.google.com/blog/products/ai-machine-learning/bfloat16-the-secret-to-high-performance-on-cloud-tpus"
+        }
+      ]
+    },
+    {
+      "title": "Sampling: Temperature, Top-k, Top-p",
+      "content": "At inference, the model outputs logits for the next token. How you convert logits → token determines quality vs. diversity tradeoff.\n\n**Greedy decoding:** argmax(logits). Deterministic, repeatable, but boring. Model often commits to weaker tokens early and repeats (mode collapse).\n\n**Temperature:** Scale logits before softmax: softmax(logits / T). T < 1 sharpens distribution (favors high-probability tokens, less diversity). T > 1 flattens distribution (more randomness). T=1 is identity. Temperature is the simplest diversity control—start here.\n\n**Top-k sampling:** Only sample from the k most likely tokens. Removes low-probability noise. Problem: k is fixed—sometimes top-5 is right, sometimes top-100 is needed for rich generation. Often k=40 or k=50.\n\n**Top-p (Nucleus) sampling:** Keep top tokens until cumulative probability reaches p (usually 0.9). Adaptive: if top-3 tokens sum to 90%, use top-3; if top-50 needed, use top-50. Elegant, requires only one hyperparameter. Empirically better than fixed top-k.\n\n**Combining:** Use temperature (control overall randomness) + top-p (filter implausible tail). Example: T=0.7, top-p=0.9. Rarely combine top-k + top-p (redundant).\n\n**Why not greedy?** Models are trained on diverse corpora. At inference, greedy picks the mode, but the mode might be \"the the the\" if earlier tokens were picked greedily. Sampling from the model's true distribution feels more natural.\n\n**Why This Matters:** Sampling strategy directly controls output quality. Many model failures (repetition, incoherence) trace to poor sampling, not model capacity. Understanding temperature and top-p allows you to tune generation for different tasks. Code generation needs low temperature (T=0.2), creative writing needs high (T=1.2).\n\n**Common Pitfalls:**\n- Using temperature=0 (argmax) for any creative task—produces robot-like repetition\n- Combining top-k AND top-p redundantly—use one or the other\n- Not adjusting hyperparameters per task—copy-paste settings across different applications\n- Setting temperature too high (T>1.5)—complete gibberish, incoherent\n- Forgetting that models can be biased toward the training distribution—sampling can't fix a bad model",
+      "code": "import torch\nimport torch.nn.functional as F\n\ndef sample_next_token(logits, temperature=1.0, top_k=None, top_p=None):\n    \"\"\"\n    Sample next token with temperature, top-k, and top-p.\n\n    Args:\n        logits: (vocab_size,) or (batch_size, vocab_size)\n        temperature: float, >0\n        top_k: int or None (no filtering)\n        top_p: float in [0, 1] or None (no filtering)\n\n    Returns:\n        token indices\n    \"\"\"\n    # Apply temperature\n    logits = logits / temperature\n\n    # Top-k filtering\n    if top_k is not None:\n        top_k = min(top_k, logits.size(-1))\n        top_logits, top_indices = torch.topk(logits, top_k, dim=-1)\n        # Zero out everything not in top-k\n        min_val = top_logits[:, -1] if logits.dim() > 1 else top_logits[-1]\n        logits = torch.where(logits >= min_val.unsqueeze(-1), logits, torch.full_like(logits, -1e9))\n\n    # Top-p (nucleus) filtering\n    if top_p is not None:\n        sorted_logits, sorted_indices = torch.sort(logits, descending=True, dim=-1)\n        cumsum = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)\n        # Find cutoff: where cumsum first exceeds top_p\n        sorted_logits[cumsum > top_p] = -1e9\n        # Unsort back to original vocab order\n        logits = torch.scatter(torch.full_like(logits, -1e9), -1, sorted_indices, sorted_logits)\n\n    # Sample from distribution\n    probs = F.softmax(logits, dim=-1)\n    token = torch.multinomial(probs, num_samples=1)\n    return token\n\n# Example: Generate sequence\nvocab_size = 10000\nmax_len = 20\ncontext = [42]  # Start token\n\nfor _ in range(max_len):\n    # Dummy logits from model\n    logits = torch.randn(vocab_size)\n\n    # Greedy\n    greedy_token = logits.argmax().item()\n\n    # With temperature\n    temp_token = sample_next_token(logits, temperature=0.7)\n\n    # Top-p (nucleus) sampling\n    nucleus_token = sample_next_token(logits, temperature=0.8, top_p=0.9)\n\n    # Top-k + temperature\n    topk_token = sample_next_token(logits, temperature=0.7, top_k=50)\n\nprint(f\"Greedy: {greedy_token}, Nucleus: {nucleus_token.item()}, Top-k: {topk_token.item()}\")\n\n# Batch version\nbatch_logits = torch.randn(4, vocab_size)  # 4 sequences\ntokens = sample_next_token(batch_logits, temperature=0.8, top_p=0.9)\nprint(f\"Batch tokens shape: {tokens.shape}\")\n",
+      "references": [
+        {
+          "title": "The Curious Case of Neural Text Degeneration (Holtzman et al., 2019)",
+          "url": "https://arxiv.org/abs/1910.14599"
+        },
+        {
+          "title": "Nucleus Sampling (top-p) - OpenAI GPT-2 blog",
+          "url": "https://openai.com/blog/better-language-models/"
+        },
+        {
+          "title": "Temperature in sampling - Distill",
+          "url": "https://distill.pub/2021/gpt3-prompt-examples/"
+        }
+      ]
+    }
+  ],
+  "quiz": [
+    {
+      "question": "Why does torch.nn.CrossEntropyLoss expect logits, not probabilities?",
+      "options": [
+        "It's more efficient to compute softmax internally",
+        "Numerical stability: subtracting max logit prevents overflow when exp() is huge",
+        "Applying softmax twice corrupts the loss calculation",
+        "All of the above"
+      ],
+      "correct": 3,
+      "explanation": "All are correct. PyTorch fuses softmax + cross-entropy for numerical stability (subtracts max logit before exp). Passing probs means applying softmax twice, which is mathematically wrong and kills gradients. Always pass raw logits."
+    },
+    {
+      "question": "What is the key difference between AdamW and Adam in weight decay?",
+      "options": [
+        "AdamW uses L2 regularization instead of weight decay",
+        "AdamW decouples weight decay from the adaptive learning rate, applying it directly to parameters",
+        "AdamW removes the bias correction term",
+        "AdamW uses a different β₂ value"
+      ],
+      "correct": 1,
+      "explanation": "AdamW applies weight decay directly (θ ← θ - λθ) independent of the adaptive learning rate. In Adam, L2 regularization gets scaled by the adaptive LR, which is suboptimal. This decoupling is crucial for modern deep models."
+    },
+    {
+      "question": "In a Transformer, why is pre-norm considered more stable than post-norm?",
+      "options": [
+        "Pre-norm reduces the number of parameters",
+        "Normalizing the input to each block stabilizes activations before nonlinearities",
+        "Post-norm violates gradient flow",
+        "Pre-norm allows deeper networks without residuals"
+      ],
+      "correct": 1,
+      "explanation": "Pre-norm (LayerNorm before the block content) stabilizes the activations fed into attention/FFN, preventing explosion/vanishing. Post-norm normalizes the block output, which is less effective. Most modern models use pre-norm."
+    },
+    {
+      "question": "Why is bfloat16 preferred over float16 for LLM training on Apple Silicon?",
+      "options": [
+        "bfloat16 has a larger mantissa for better precision",
+        "bfloat16 has a larger exponent range, safer for gradients, and native MPS support",
+        "bfloat16 is always faster than float16",
+        "float16 causes loss scaling to be impossible"
+      ],
+      "correct": 1,
+      "explanation": "bfloat16 uses 8 exponent bits (matching fp32) vs fp16's 5, reducing underflow risk. MPS (Apple's Metal Performance Shaders) has poor fp16 support. bf16 is the safe default for M-series chips."
+    },
+    {
+      "question": "What does nucleus sampling (top-p) adaptively control that top-k does not?",
+      "options": [
+        "The batch size",
+        "The number of tokens to consider, based on the model's cumulative probability",
+        "The learning rate",
+        "Whether to use residual connections"
+      ],
+      "correct": 1,
+      "explanation": "Top-k fixes the number of tokens (e.g., always top-50). Top-p keeps tokens until cumulative probability reaches p (e.g., 90%), so the count adapts: maybe top-3 for confident predictions, top-80 for uncertain ones. More flexible."
+    }
+  ],
+  "exercise": {
+    "title": "Implement Top-p Sampling",
+    "description": "Write a function that implements nucleus (top-p) sampling with temperature. Given logits, return a sampled token index. Handle batch inputs and edge cases (p=1.0, p=0.0). Test with different temperature and p values to verify behavior.",
+    "starterCode": "import torch\nimport torch.nn.functional as F\n\ndef top_p_sample(logits, p=0.9, temperature=1.0):\n    \"\"\"\n    Sample from logits using nucleus (top-p) sampling.\n\n    Args:\n        logits: tensor of shape (vocab_size,) or (batch, vocab_size)\n        p: float in [0, 1], cumulative probability threshold\n        temperature: float > 0, controls randomness\n\n    Returns:\n        sampled token indices of shape () or (batch,)\n    \"\"\"\n    # TODO: Implement top-p sampling\n    pass\n\n# Test cases\nif __name__ == '__main__':\n    # Test 1: Simple case\n    logits = torch.tensor([1.0, 2.0, 3.0, 4.0, 5.0])\n    token = top_p_sample(logits, p=0.9, temperature=1.0)\n    print(f\"Sampled token: {token}\")\n\n    # Test 2: Batch\n    batch_logits = torch.randn(4, 10000)\n    tokens = top_p_sample(batch_logits, p=0.95, temperature=0.7)\n    print(f\"Batch tokens shape: {tokens.shape}\")\n\n    # Test 3: Edge cases\n    tokens_p1 = top_p_sample(logits, p=1.0)  # Should sample from all\n    tokens_p0 = top_p_sample(logits, p=0.0)  # Should pick argmax or near-argmax\n    print(f\"p=1.0 allows full dist, p=0.0 is greedy\")\n",
+    "solution": "import torch\nimport torch.nn.functional as F\n\ndef top_p_sample(logits, p=0.9, temperature=1.0):\n    \"\"\"\n    Sample from logits using nucleus (top-p) sampling.\n\n    Args:\n        logits: tensor of shape (vocab_size,) or (batch, vocab_size)\n        p: float in [0, 1], cumulative probability threshold\n        temperature: float > 0, controls randomness\n\n    Returns:\n        sampled token indices of shape () or (batch,)\n    \"\"\"\n    # Handle single/batch\n    is_batch = logits.dim() > 1\n    if not is_batch:\n        logits = logits.unsqueeze(0)\n\n    # Apply temperature\n    logits = logits / temperature\n\n    # Compute probabilities\n    probs = F.softmax(logits, dim=-1)\n\n    # Sort in descending order\n    sorted_probs, sorted_indices = torch.sort(probs, descending=True, dim=-1)\n\n    # Compute cumulative sum\n    cumsum = torch.cumsum(sorted_probs, dim=-1)\n\n    # Find cutoff index: where cumsum first exceeds p\n    # Keep tokens where cumsum <= p (and always keep the last token before cutoff)\n    cutoff_mask = cumsum <= p\n    # Always include at least one token (the most likely)\n    cutoff_mask[:, 0] = True\n\n    # Zero out probabilities outside the nucleus\n    sorted_probs = sorted_probs * cutoff_mask.float()\n\n    # Renormalize to sum to 1\n    sorted_probs = sorted_probs / sorted_probs.sum(dim=-1, keepdim=True)\n\n    # Sample from the filtered distribution\n    # Use multinomial which expects probabilities\n    token_indices = torch.multinomial(sorted_probs, num_samples=1, replacement=True)\n\n    # Map back to original vocabulary indices\n    tokens = torch.gather(sorted_indices, -1, token_indices)\n\n    # Remove batch dimension if input was not batched\n    if not is_batch:\n        tokens = tokens.squeeze(0)\n\n    return tokens.squeeze(-1)\n\n# Test cases\nif __name__ == '__main__':\n    # Test 1: Simple case\n    logits = torch.tensor([1.0, 2.0, 3.0, 4.0, 5.0])\n    token = top_p_sample(logits, p=0.9, temperature=1.0)\n    print(f\"Sampled token: {token}\")\n    assert 0 <= token.item() < 5, \"Token should be valid vocab index\"\n\n    # Test 2: Batch\n    batch_logits = torch.randn(4, 10000)\n    tokens = top_p_sample(batch_logits, p=0.95, temperature=0.7)\n    print(f\"Batch tokens shape: {tokens.shape}\")\n    assert tokens.shape == (4,), f\"Expected shape (4,), got {tokens.shape}\"\n\n    # Test 3: Edge cases\n    tokens_p1 = top_p_sample(logits, p=1.0, temperature=1.0)  # Should sample from all\n    tokens_p0 = top_p_sample(logits, p=0.0, temperature=0.01)  # Should pick argmax\n    print(f\"p=1.0 allows full dist: {tokens_p1}, p≈0 is greedy: {tokens_p0}\")\n\n    # Test 4: Distribution check (multiple samples)\n    samples = [top_p_sample(logits, p=0.9, temperature=1.0).item() for _ in range(1000)]\n    print(f\"Top-p samples most common indices: {sorted(set(samples), key=samples.count, reverse=True)[:3]}\")\n    print(\"✓ All tests passed!\")\n"
+  }
+}
