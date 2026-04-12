@@ -113,8 +113,14 @@ function App() {
           <div className="progress-text">
             {completed.length}/{modules.length} modules — {progress}%
           </div>
-          <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '8px', opacity: 0.5 }}>
-            {__COMMIT_HASH__}
+          <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '8px', opacity: 0.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>{__COMMIT_HASH__}</span>
+            <a
+              href="/oauth2/sign_out?rd=https://auth.thelittleone.rocks/oauth2/sign_out?rd=https://llm.thelittleone.rocks"
+              style={{ color: 'var(--text-muted)', textDecoration: 'none', fontSize: '10px' }}
+            >
+              logout
+            </a>
           </div>
         </div>
       </nav>

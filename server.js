@@ -115,7 +115,7 @@ function formatConversation(history, systemPrompt) {
   return prompt;
 }
 
-// Claude chat endpoint
+// Claude chat endpoint — streams response via SSE
 app.post('/api/claude', async (req, res) => {
   const { message, appContext, history, model } = req.body;
 
@@ -130,17 +130,24 @@ app.post('/api/claude', async (req, res) => {
   } else if (model === 'sonnet') {
     args.push('--model', 'claude-sonnet-4-6');
   }
-  // Default: whatever claude CLI defaults to
+
+  // Set up SSE headers
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
 
   try {
     const claude = spawn('claude', args, {
       env: { ...process.env },
     });
 
-    let output = '';
     let error = '';
 
-    claude.stdout.on('data', (data) => { output += data.toString(); });
+    claude.stdout.on('data', (data) => {
+      res.write(`data: ${JSON.stringify({ chunk: data.toString() })}\n\n`);
+    });
+
     claude.stderr.on('data', (data) => { error += data.toString(); });
 
     claude.stdin.write(fullPrompt);
@@ -148,19 +155,26 @@ app.post('/api/claude', async (req, res) => {
 
     claude.on('close', (code) => {
       if (code !== 0) {
-        console.error('Claude error:', error);
-        res.status(500).json({ error: error || 'Claude process failed' });
-      } else {
-        res.json({ response: output.trim() });
+        res.write(`data: ${JSON.stringify({ error: error || 'Claude process failed' })}\n\n`);
       }
+      res.write('data: [DONE]\n\n');
+      res.end();
     });
 
     claude.on('error', (err) => {
-      console.error('Failed to start claude:', err);
-      res.status(500).json({ error: 'Failed to start claude CLI. Make sure claude is installed and you are logged in.' });
+      res.write(`data: ${JSON.stringify({ error: 'Failed to start claude CLI.' })}\n\n`);
+      res.write('data: [DONE]\n\n');
+      res.end();
+    });
+
+    // Clean up if client disconnects
+    req.on('close', () => {
+      claude.kill();
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
+    res.write('data: [DONE]\n\n');
+    res.end();
   }
 });
 
