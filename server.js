@@ -139,7 +139,7 @@ app.post('/api/claude', async (req, res) => {
 
   try {
     const claude = spawn('claude', args, {
-      env: { ...process.env },
+      env: { ...process.env, PATH: `/root/.local/bin:${process.env.PATH}` },
     });
 
     let error = '';
