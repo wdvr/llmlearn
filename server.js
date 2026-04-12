@@ -142,10 +142,12 @@ app.post('/api/claude', async (req, res) => {
   res.write(': keepalive\n\n');
 
   try {
+    console.log(`[claude] Spawning: claude ${args.join(' ')} (prompt ${fullPrompt.length} bytes)`);
     const claude = spawn('claude', args, {
       env: { ...process.env, PATH: `/root/.local/bin:${process.env.PATH}` },
     });
 
+    console.log(`[claude] Process spawned, pid=${claude.pid}`);
     let error = '';
     let finished = false;
     let clientDisconnected = false;
@@ -161,14 +163,19 @@ app.post('/api/claude', async (req, res) => {
     };
 
     claude.stdout.on('data', (data) => {
+      console.log(`[claude] stdout: ${data.toString().substring(0, 100)}...`);
       if (!clientDisconnected) {
         res.write(`data: ${JSON.stringify({ chunk: data.toString() })}\n\n`);
       }
     });
 
-    claude.stderr.on('data', (data) => { error += data.toString(); });
+    claude.stderr.on('data', (data) => {
+      console.error(`[claude] stderr: ${data.toString().substring(0, 200)}`);
+      error += data.toString();
+    });
 
-    claude.stdin.write(fullPrompt);
+    const written = claude.stdin.write(fullPrompt);
+    console.log(`[claude] stdin.write returned ${written}, ending stdin`);
     claude.stdin.end();
 
     // Send periodic keepalive comments while waiting for response
