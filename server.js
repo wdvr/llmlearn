@@ -115,33 +115,37 @@ function formatConversation(history, systemPrompt) {
   return prompt;
 }
 
-// Debug endpoint to test spawning — POST version to match /api/claude
-app.post('/api/debug-spawn', (req, res) => {
-  const { prompt } = req.body || {};
-  const testPrompt = prompt || 'Say hi';
-  res.setHeader('Content-Type', 'text/plain');
-  console.log(`[debug-post] Spawning with prompt: "${testPrompt.substring(0, 50)}..." (${testPrompt.length} bytes)`);
+// Debug endpoint — SSE version, mirrors /api/claude but with fixed "Say hi" prompt
+app.post('/api/debug-sse', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+  res.write(': keepalive\n\n');
+
+  console.log(`[debug-sse] Starting spawn`);
   const claude = spawn('claude', ['-p', '--model', 'claude-sonnet-4-6'], {
     env: { ...process.env, PATH: `/root/.local/bin:${process.env.PATH}` },
   });
-  console.log(`[debug-post] pid=${claude.pid}`);
-  claude.stdin.write(testPrompt);
+  console.log(`[debug-sse] pid=${claude.pid}`);
+  claude.stdin.write('Say hi');
   claude.stdin.end();
-  let out = '', err = '';
-  claude.stdout.on('data', d => { out += d.toString(); console.log('[debug-post] stdout:', d.toString().substring(0, 100)); });
-  claude.stderr.on('data', d => { err += d.toString(); console.log('[debug-post] stderr:', d.toString().substring(0, 100)); });
+
+  claude.stdout.on('data', d => {
+    console.log('[debug-sse] stdout:', d.toString().substring(0, 100));
+    res.write(`data: ${JSON.stringify({ chunk: d.toString() })}\n\n`);
+  });
+  claude.stderr.on('data', d => console.log('[debug-sse] stderr:', d.toString().substring(0, 100)));
   claude.on('close', (code, signal) => {
-    console.log(`[debug-post] close: code=${code} signal=${signal}`);
-    res.end(`code=${code} signal=${signal}\nstdout: ${out}\nstderr: ${err}`);
+    console.log(`[debug-sse] close: code=${code} signal=${signal}`);
+    res.write('data: [DONE]\n\n');
+    res.end();
   });
-  claude.on('error', e => {
-    console.log(`[debug-post] error: ${e.message}`);
-    res.end(`error: ${e.message}`);
+  req.on('close', () => {
+    console.log(`[debug-sse] req.close`);
+    claude.kill();
   });
-  setTimeout(() => {
-    console.log('[debug-post] timeout 30s');
-    res.end(`TIMEOUT\nstdout: ${out}\nstderr: ${err}`);
-  }, 30000);
 });
 
 // Claude chat endpoint — streams response via SSE
