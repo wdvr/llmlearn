@@ -39,13 +39,16 @@ export default function ColabExercise({ exercise }) {
             </button>
           </div>
           <pre style={{
-            background: 'var(--bg-code)',
+            background: 'var(--code-bg)',
             padding: '16px',
             borderRadius: '8px',
             overflow: 'auto',
             fontSize: 'var(--font-size-code)',
             lineHeight: 1.5,
-            border: '1px solid var(--border)'
+            border: '1px solid var(--border)',
+            maxWidth: '100%',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word'
           }}>
             <code>{exercise.starterCode}</code>
           </pre>
@@ -135,7 +138,7 @@ export default function ColabExercise({ exercise }) {
             </button>
           </div>
           <pre style={{
-            background: 'var(--bg-code)',
+            background: 'var(--code-bg)',
             padding: '16px',
             borderRadius: '8px',
             overflow: 'auto',
