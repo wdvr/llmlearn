@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom'
-import { modules } from './content/modules'
+import { Routes, Route, Link, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { courses, allModules, findCourse, findModuleCourse } from './content/courses'
 import ModulePage from './components/ModulePage'
 import PRReview from './components/PRReview'
 import ClaudeChat from './components/ClaudeChat'
@@ -24,36 +24,48 @@ function App() {
   })
   const [currentSection, setCurrentSection] = useState(null)
 
+  // Derive active course from URL
+  const activeCourse = useMemo(() => {
+    const moduleMatch = location.pathname.match(/^\/module\/(.+)$/)
+    if (moduleMatch) return findModuleCourse(moduleMatch[1])
+    const courseMatch = location.pathname.match(/^\/course\/(.+)$/)
+    if (courseMatch) return findCourse(courseMatch[1])
+    return null
+  }, [location.pathname])
+
   // Build app context for Claude chat
   const appContext = useMemo(() => {
     const path = location.pathname
     const moduleMatch = path.match(/^\/module\/(.+)$/)
 
     if (moduleMatch) {
-      const mod = modules.find(m => m.id === moduleMatch[1])
+      const mod = allModules.find(m => m.id === moduleMatch[1])
+      const course = findModuleCourse(moduleMatch[1])
       return {
         currentPage: 'module',
+        currentCourse: course ? { id: course.id, title: course.title } : null,
         currentModule: mod ? { title: mod.title, description: mod.description, sections: mod.sections?.map(s => ({ title: s.title })) } : null,
         currentSection,
         completedModules: completed,
         quizScores,
-        totalModules: modules.length,
+        totalModules: course ? course.modules.length : allModules.length,
       }
     } else if (path.startsWith('/prs')) {
       return {
         currentPage: 'prs',
         completedModules: completed,
         quizScores,
-        totalModules: modules.length,
+        totalModules: allModules.length,
       }
     }
     return {
       currentPage: 'home',
+      currentCourse: activeCourse ? { id: activeCourse.id, title: activeCourse.title } : null,
       completedModules: completed,
       quizScores,
-      totalModules: modules.length,
+      totalModules: allModules.length,
     }
-  }, [location.pathname, completed, quizScores, currentSection])
+  }, [location.pathname, completed, quizScores, currentSection, activeCourse])
 
   useEffect(() => {
     localStorage.setItem('completed', JSON.stringify(completed))
@@ -71,57 +83,112 @@ function App() {
     }
   }
 
-  const progress = Math.round((completed.length / modules.length) * 100)
+  // Progress for active course or global
+  const courseModules = activeCourse ? activeCourse.modules : allModules
+  const courseCompleted = courseModules.filter(m => completed.includes(m.id)).length
+  const progress = Math.round((courseCompleted / courseModules.length) * 100)
 
   return (
     <div className="app">
       {/* Sidebar */}
       <nav className="sidebar">
         <div className="sidebar-header">
-          <h1>PyTorch & LLMs</h1>
-          <p>Learning on Apple Silicon</p>
+          <h1>{activeCourse ? activeCourse.title : 'LLM Learn'}</h1>
+          <p>{activeCourse ? activeCourse.subtitle : 'Choose a course'}</p>
         </div>
 
         <div className="sidebar-nav">
-          <div className="nav-section">Course</div>
-          <Link
-            to="/"
-            className={`nav-item ${location.pathname === '/' ? 'active' : ''}`}
-          >
-            <span className="nav-dot" />
-            <span>Home</span>
-          </Link>
+          {activeCourse ? (
+            <>
+              <Link
+                to="/"
+                className="nav-item"
+                style={{ fontSize: '12px', color: 'var(--text-muted)', opacity: 0.7 }}
+              >
+                <span className="nav-dot" style={{ opacity: 0.4 }} />
+                <span>All Courses</span>
+              </Link>
 
-          {modules.map((mod) => (
-            <Link
-              key={mod.id}
-              to={`/module/${mod.id}`}
-              className={`nav-item ${
-                location.pathname === `/module/${mod.id}` ? 'active' : ''
-              } ${completed.includes(mod.id) ? 'completed' : ''}`}
-            >
-              <span className="nav-dot" />
-              <span>{mod.title}</span>
-            </Link>
-          ))}
+              <div className="nav-section">Modules</div>
+              <Link
+                to={`/course/${activeCourse.id}`}
+                className={`nav-item ${location.pathname === `/course/${activeCourse.id}` ? 'active' : ''}`}
+              >
+                <span className="nav-dot" />
+                <span>Overview</span>
+              </Link>
 
-          <div className="nav-section">Tools</div>
-          <Link
-            to="/prs"
-            className={`nav-item ${location.pathname.startsWith('/prs') ? 'active' : ''}`}
-          >
-            <span className="nav-dot" />
-            <span>PR Review</span>
-          </Link>
+              {activeCourse.modules.map((mod) => (
+                <Link
+                  key={mod.id}
+                  to={`/module/${mod.id}`}
+                  className={`nav-item ${
+                    location.pathname === `/module/${mod.id}` ? 'active' : ''
+                  } ${completed.includes(mod.id) ? 'completed' : ''}`}
+                >
+                  <span className="nav-dot" />
+                  <span>{mod.title}</span>
+                </Link>
+              ))}
+
+              {activeCourse.curatedPRs && activeCourse.curatedPRs.length > 0 && (
+                <>
+                  <div className="nav-section">Tools</div>
+                  <Link
+                    to="/prs"
+                    className={`nav-item ${location.pathname.startsWith('/prs') ? 'active' : ''}`}
+                  >
+                    <span className="nav-dot" />
+                    <span>PR Review</span>
+                  </Link>
+                </>
+              )}
+            </>
+          ) : (
+            <>
+              <div className="nav-section">Courses</div>
+              {courses.map(c => {
+                const done = c.modules.filter(m => completed.includes(m.id)).length
+                return (
+                  <Link
+                    key={c.id}
+                    to={`/course/${c.id}`}
+                    className={`nav-item ${location.pathname === `/course/${c.id}` ? 'active' : ''}`}
+                  >
+                    <span className="nav-dot" />
+                    <span>{c.icon} {c.title}</span>
+                    {done > 0 && (
+                      <span style={{ marginLeft: 'auto', fontSize: '10px', color: 'var(--text-muted)' }}>
+                        {done}/{c.modules.length}
+                      </span>
+                    )}
+                  </Link>
+                )
+              })}
+
+              <div className="nav-section">Tools</div>
+              <Link
+                to="/prs"
+                className={`nav-item ${location.pathname.startsWith('/prs') ? 'active' : ''}`}
+              >
+                <span className="nav-dot" />
+                <span>PR Review</span>
+              </Link>
+            </>
+          )}
         </div>
 
         <div className="sidebar-footer">
-          <div className="progress-bar">
-            <div className="progress-fill" style={{ width: `${progress}%` }} />
-          </div>
-          <div className="progress-text">
-            {completed.length}/{modules.length} modules — {progress}%
-          </div>
+          {activeCourse && (
+            <>
+              <div className="progress-bar">
+                <div className="progress-fill" style={{ width: `${progress}%` }} />
+              </div>
+              <div className="progress-text">
+                {courseCompleted}/{courseModules.length} modules — {progress}%
+              </div>
+            </>
+          )}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '8px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
               <button onClick={() => setFontSize(s => Math.max(11, s - 1))} style={{ background: 'none', border: '1px solid var(--border)', color: 'var(--text-muted)', borderRadius: '3px', width: '20px', height: '20px', cursor: 'pointer', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>-</button>
@@ -144,12 +211,13 @@ function App() {
       {/* Main content */}
       <main className="main">
         <Routes>
-          <Route path="/" element={<HomePage modules={modules} completed={completed} />} />
+          <Route path="/" element={<LandingPage courses={courses} completed={completed} />} />
+          <Route path="/course/:courseId" element={<CoursePage courses={courses} completed={completed} />} />
           <Route
             path="/module/:id"
             element={
               <ModulePage
-                modules={modules}
+                modules={allModules}
                 completed={completed}
                 onComplete={markComplete}
                 onQuizScore={(moduleId, score, total) => {
@@ -174,23 +242,87 @@ function App() {
   )
 }
 
-function HomePage({ modules, completed }) {
+function LandingPage({ courses, completed }) {
   return (
     <div className="home">
-      <h2>Learn PyTorch & LLM Architecture</h2>
+      <h2>Choose a Course</h2>
       <p className="subtitle">
-        Hands-on course covering tensors, backprop, transformers, MPS acceleration,
-        and building your own language model — all on Apple Silicon.
+        Hands-on GPU programming courses — from PyTorch on Apple Silicon to CUDA parallel computing.
       </p>
 
       <div className="module-cards">
-        {modules.map((mod, i) => (
+        {courses.map(course => {
+          const done = course.modules.filter(m => completed.includes(m.id)).length
+          const pct = Math.round((done / course.modules.length) * 100)
+          return (
+            <Link
+              key={course.id}
+              to={`/course/${course.id}`}
+              className="module-card"
+              style={{ borderLeft: `3px solid ${course.color}` }}
+            >
+              <div className="module-num" style={{ color: course.color, fontSize: '24px' }}>
+                {course.icon}
+              </div>
+              <div className="module-card-text">
+                <h4>{course.title}</h4>
+                <p>{course.description}</p>
+                <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--text-muted)' }}>
+                  {course.modules.length} modules
+                  {done > 0 && ` — ${done} completed (${pct}%)`}
+                </div>
+              </div>
+            </Link>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function CoursePage({ courses, completed }) {
+  const { courseId } = useParams()
+  const course = courses.find(c => c.id === courseId)
+
+  if (!course) {
+    return (
+      <div className="home">
+        <h2>Course not found</h2>
+        <Link to="/">Back to courses</Link>
+      </div>
+    )
+  }
+
+  return (
+    <div className="home">
+      <h2>{course.icon} {course.title}</h2>
+      <p className="subtitle">{course.description}</p>
+
+      {course.exerciseRuntime === 'colab' && (
+        <div style={{
+          padding: '12px 16px',
+          background: 'var(--bg-tertiary)',
+          borderRadius: '8px',
+          fontSize: '13px',
+          color: 'var(--text-muted)',
+          marginBottom: '24px',
+          border: '1px solid var(--border)',
+          lineHeight: 1.5
+        }}>
+          <strong style={{ color: 'var(--text)' }}>Exercises run on Google Colab</strong> with a free T4 GPU.
+          Code uses <code style={{ background: 'var(--bg)', padding: '1px 5px', borderRadius: '3px' }}>numba.cuda</code> — Python CUDA that runs real GPU kernels.
+          No local GPU needed.
+        </div>
+      )}
+
+      <div className="module-cards">
+        {course.modules.map((mod, i) => (
           <Link
             key={mod.id}
             to={`/module/${mod.id}`}
             className={`module-card ${completed.includes(mod.id) ? 'completed' : ''}`}
           >
-            <div className="module-num">
+            <div className="module-num" style={{ color: course.color }}>
               {completed.includes(mod.id) ? '✓' : i + 1}
             </div>
             <div className="module-card-text">
@@ -200,13 +332,15 @@ function HomePage({ modules, completed }) {
           </Link>
         ))}
 
-        <Link to="/prs" className="module-card">
-          <div className="module-num" style={{ color: '#bc8cff' }}>PR</div>
-          <div className="module-card-text">
-            <h4>PyTorch MPS PR Review</h4>
-            <p>Browse and study real PyTorch PRs related to MPS backend</p>
-          </div>
-        </Link>
+        {course.curatedPRs && course.curatedPRs.length > 0 && (
+          <Link to="/prs" className="module-card">
+            <div className="module-num" style={{ color: '#bc8cff' }}>PR</div>
+            <div className="module-card-text">
+              <h4>PyTorch MPS PR Review</h4>
+              <p>Browse and study real PyTorch PRs related to MPS backend</p>
+            </div>
+          </Link>
+        )}
       </div>
     </div>
   )

@@ -1,0 +1,21 @@
+{
+  "id": "cuda-reduction",
+  "title": "Parallel Reduction",
+  "description": "Tree-based reduction, divergence avoidance, multi-block reduction",
+  "course": "cuda-parallel",
+  "sections": [
+    {
+      "title": "Overview",
+      "content": "## Coming Soon\n\nThis module is being built. Content will cover: Tree-based reduction, divergence avoidance, multi-block reduction.",
+      "references": []
+    }
+  ],
+  "quiz": [],
+  "exercise": {
+    "title": "Parallel Reduction",
+    "description": "Exercise for this module. Run on Google Colab with T4 GPU.",
+    "colabUrl": "https://colab.research.google.com/",
+    "starterCode": "# Starter code coming soon\nfrom numba import cuda\nimport numpy as np\n\nprint(\"Ready for CUDA!\")",
+    "solution": "# Solution coming soon"
+  }
+}

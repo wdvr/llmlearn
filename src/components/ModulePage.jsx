@@ -2,7 +2,9 @@ import React, { useState, useRef, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import Quiz from './Quiz'
 import Exercise from './Exercise'
+import ColabExercise from './ColabExercise'
 import CodeBlock from './CodeBlock'
+import { findModuleCourse } from '../content/courses'
 
 // Render markdown-ish content: fenced code blocks, **bold**, `code`, [text](url), lists, tables
 function renderMarkdown(text) {
@@ -184,8 +186,13 @@ function inlineMarkdown(text) {
 export default function ModulePage({ modules, completed, onComplete, onQuizScore, onSectionChange }) {
   const { id } = useParams()
   const navigate = useNavigate()
-  const module = modules.find(m => m.id === id)
-  const moduleIndex = modules.findIndex(m => m.id === id)
+
+  // Scope navigation to the module's course
+  const course = findModuleCourse(id)
+  const courseModules = course ? course.modules : modules
+  const module = courseModules.find(m => m.id === id) || modules.find(m => m.id === id)
+  const moduleIndex = courseModules.findIndex(m => m.id === id)
+  const isColab = course?.exerciseRuntime === 'colab'
 
   useEffect(() => {
     window.scrollTo(0, 0)
@@ -221,8 +228,8 @@ export default function ModulePage({ modules, completed, onComplete, onQuizScore
     return <div className="content"><p>Module not found.</p></div>
   }
 
-  const prevModule = moduleIndex > 0 ? modules[moduleIndex - 1] : null
-  const nextModule = moduleIndex < modules.length - 1 ? modules[moduleIndex + 1] : null
+  const prevModule = moduleIndex > 0 ? courseModules[moduleIndex - 1] : null
+  const nextModule = moduleIndex < courseModules.length - 1 ? courseModules[moduleIndex + 1] : null
 
   return (
     <div className="content">
@@ -275,7 +282,9 @@ export default function ModulePage({ modules, completed, onComplete, onQuizScore
       )}
 
       {module.exercise && (
-        <Exercise exercise={module.exercise} />
+        isColab || module.exercise.colabUrl
+          ? <ColabExercise exercise={module.exercise} />
+          : <Exercise exercise={module.exercise} />
       )}
 
       <div className="module-nav">
@@ -302,9 +311,13 @@ export default function ModulePage({ modules, completed, onComplete, onQuizScore
           <Link to={`/module/${nextModule.id}`} className="btn btn-secondary">
             {nextModule.title} →
           </Link>
+        ) : course ? (
+          <Link to={`/course/${course.id}`} className="btn btn-secondary">
+            Course Overview →
+          </Link>
         ) : (
-          <Link to="/prs" className="btn btn-secondary">
-            PR Review →
+          <Link to="/" className="btn btn-secondary">
+            Home →
           </Link>
         )}
       </div>
