@@ -1,25 +1,100 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
+import mermaid from 'mermaid'
 import Quiz from './Quiz'
 import Exercise from './Exercise'
 import ColabExercise from './ColabExercise'
 import CodeBlock from './CodeBlock'
 import { findModuleCourse } from '../content/courses'
 
+mermaid.initialize({
+  startOnLoad: false,
+  theme: 'dark',
+  securityLevel: 'loose',
+  fontFamily: "'Inter', -apple-system, sans-serif",
+  themeVariables: {
+    background: 'transparent',
+    primaryColor: '#1f2937',
+    primaryTextColor: '#e5e7eb',
+    primaryBorderColor: '#58a6ff',
+    lineColor: '#58a6ff',
+    secondaryColor: '#374151',
+    tertiaryColor: '#111827',
+  },
+})
+
+let mermaidIdCounter = 0
+function MermaidDiagram({ chart }) {
+  const ref = useRef(null)
+  const [svg, setSvg] = useState('')
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    const id = `mermaid-${++mermaidIdCounter}`
+    mermaid.render(id, chart).then(({ svg }) => {
+      if (!cancelled) setSvg(svg)
+    }).catch(err => {
+      if (!cancelled) setError(err.message || String(err))
+    })
+    return () => { cancelled = true }
+  }, [chart])
+
+  if (error) {
+    return (
+      <div style={{ margin: '12px 0', padding: '12px', background: 'var(--bg-tertiary)', borderRadius: '6px', color: 'var(--text-muted)', fontSize: '13px' }}>
+        <div style={{ marginBottom: '6px', color: '#f85149' }}>Mermaid render error:</div>
+        <pre style={{ fontSize: '12px', whiteSpace: 'pre-wrap' }}>{error}</pre>
+        <pre style={{ fontSize: '12px', whiteSpace: 'pre-wrap', marginTop: '8px' }}>{chart}</pre>
+      </div>
+    )
+  }
+
+  return (
+    <div
+      ref={ref}
+      style={{
+        margin: '16px 0',
+        padding: '16px',
+        background: 'var(--bg-tertiary)',
+        borderRadius: '8px',
+        textAlign: 'center',
+        overflowX: 'auto',
+      }}
+      dangerouslySetInnerHTML={{ __html: svg }}
+    />
+  )
+}
+
 // Render markdown-ish content: fenced code blocks, **bold**, `code`, [text](url), lists, tables
 function renderMarkdown(text) {
-  const parts = text.split(/```(?:\w*\n?)?/);
-  return parts.map((part, i) => {
-    // Odd parts are inside fenced code blocks
-    if (i % 2 === 1) {
+  // Tokenize fences while preserving language tags. Each fenced block becomes
+  // {lang, body}; surrounding prose stays as plain strings.
+  const tokens = [];
+  const fenceRe = /```(\w*)\n?([\s\S]*?)```/g;
+  let lastIdx = 0;
+  let match;
+  while ((match = fenceRe.exec(text)) !== null) {
+    if (match.index > lastIdx) tokens.push({ type: 'prose', text: text.slice(lastIdx, match.index) });
+    tokens.push({ type: 'fence', lang: match[1] || '', body: match[2] });
+    lastIdx = match.index + match[0].length;
+  }
+  if (lastIdx < text.length) tokens.push({ type: 'prose', text: text.slice(lastIdx) });
+
+  return tokens.map((tok, i) => {
+    if (tok.type === 'fence') {
+      if (tok.lang === 'mermaid') {
+        return <MermaidDiagram key={i} chart={tok.body.trim()} />;
+      }
       return (
         <div key={i} className="code-block" style={{ margin: '12px 0' }}>
           <pre style={{ padding: '12px 16px', fontSize: '13px', lineHeight: '1.5', overflow: 'auto' }}>
-            <code>{part.replace(/\n$/, '')}</code>
+            <code>{tok.body.replace(/\n$/, '')}</code>
           </pre>
         </div>
       );
     }
+    const part = tok.text;
     // Even parts are regular content
     const blocks = part.split('\n\n');
     return blocks.map((block, j) => {
