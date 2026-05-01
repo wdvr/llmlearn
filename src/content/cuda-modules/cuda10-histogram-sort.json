@@ -122,15 +122,15 @@
       "explanation": "Privatized histograms give each block its own histogram in shared memory. Shared memory atomics are approximately 10x faster than global memory atomics. The final merge into the global histogram has much lower contention: only num_blocks atomic adds per bin instead of num_elements."
     },
     {
-      "question": "A 256-thread block computes a 256-bin histogram for 1 million elements (approximately 3900 blocks). How many GLOBAL atomic operations does the privatized approach use versus the naive approach?",
+      "question": "A 256-thread block computes a 256-bin histogram for 1 million elements (approximately 3900 blocks). What is the key reason the privatized approach is faster than naive global atomics?",
       "options": [
-        "Privatized: 256 * 3900 = approximately 1M; Naive: 1M -- same number, same speed",
-        "Privatized: 256 * 3900 = approximately 1M; Naive: 0 (no atomics needed)",
-        "Privatized: approximately 1M global atomics; Naive: approximately 1M global atomics -- but naive has all atomics happening simultaneously across threads, while privatized batches them to approximately 3900 per bin spread over time",
-        "Privatized: approximately 1M global atomics; Naive: much more than 1M global atomics due to retries"
+        "Privatized does fewer total atomic operations",
+        "Privatized avoids atomics entirely",
+        "The bulk of atomics happen in fast shared memory (~10x lower latency); the global atomics are ~num_blocks per bin, much less contended than naive (~num_threads_touching_bin)",
+        "Privatized uses bitwise tricks instead of adds"
       ],
       "correct": 2,
-      "explanation": "Both approaches perform approximately 1M global atomic adds total. The crucial difference is CONTENTION per bin: naive has up to thousands of threads contending on the same bin simultaneously, serializing them. Privatized reduces this to approximately 3900 atomic adds per bin (one per block), spread over time since blocks execute at different times. Note that privatized actually does MORE atomics overall (~1M shared + ~1M global merge), but the bulk runs on fast shared memory at ~10x lower latency, and the global atomics are much less contended."
+      "explanation": "Privatized actually performs MORE atomics overall (~1M in shared memory during the block-local pass, plus ~256 * 3900 = ~1M in global memory during the merge). The win is two-fold: (1) the bulk of atomics run on shared memory at ~10x lower latency than global atomics, and (2) the global merge has at most num_blocks contenders per bin, versus naive where up to thousands of threads can hammer the same bin simultaneously. Lower contention means less serialization, even at similar total counts."
     },
     {
       "question": "Which GPU sorting algorithm uses the scan (prefix sum) primitive as a core building block?",
@@ -171,7 +171,7 @@
         "Each thread reads a contiguous chunk: idx = (blockIdx*blockDim + tid)*coarsen + i",
         "Each thread reads with stride blockDim: idx = blockIdx*blockDim*coarsen + i*blockDim + tid",
         "It does not matter; coalescing only applies to non-coarsened kernels",
-        "Each thread reads a random subset chosen at launch time"
+        "Each thread reads from a random offset using a hash of tid: idx = hash(tid) % N"
       ],
       "correct": 1,
       "explanation": "The contiguous-chunks pattern (option 1) makes adjacent threads in a warp read addresses that are 'coarsen' apart -- a strided pattern that breaks coalescing and can cost up to coarsen-x more memory transactions. The stride-blockDim pattern (option 2) ensures that on each iteration of the inner loop, the warp reads consecutive addresses, giving one coalesced transaction per warp. This is the same fix used for coarsened reduction in Module 8."

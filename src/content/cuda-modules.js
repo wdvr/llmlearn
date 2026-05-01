@@ -1,14 +1,263 @@
-import cuda01 from './cuda-modules/cuda01-intro-gpu.json'
-import cuda02 from './cuda-modules/cuda02-programming-model.json'
-import cuda03 from './cuda-modules/cuda03-memory-model.json'
-import cuda04 from './cuda-modules/cuda04-tiling-matmul.json'
-import cuda05 from './cuda-modules/cuda05-thread-execution.json'
-import cuda06 from './cuda-modules/cuda06-performance.json'
-import cuda07 from './cuda-modules/cuda07-convolution.json'
-import cuda08 from './cuda-modules/cuda08-reduction.json'
-import cuda09 from './cuda-modules/cuda09-scan.json'
-import cuda10 from './cuda-modules/cuda10-histogram-sort.json'
-import cuda11 from './cuda-modules/cuda11-sparse-graphs.json'
-import cuda12 from './cuda-modules/cuda12-optimization-capstone.json'
+// Manifest-only entries. Full module content (sections.content, quiz, exercise)
+// is dynamic-imported on demand via loadModule(id) so it's split into a
+// per-module chunk and not bundled into the main app chunk.
 
-export const modules = [cuda01, cuda02, cuda03, cuda04, cuda05, cuda06, cuda07, cuda08, cuda09, cuda10, cuda11, cuda12]
+export const modules = [
+  {
+    id: 'cuda-intro-gpu',
+    title: 'Introduction to GPU Computing',
+    description: 'Understand why parallel computing matters, how GPU architecture differs from CPU, and when GPUs accelerate workloads.',
+    sections: [
+      { title: 'The End of the Free Lunch' },
+      { title: 'Throughput vs Latency' },
+      { title: 'Why It Matters & Common Errors' },
+      { title: 'Two Different Machines' },
+      { title: 'Latency Hiding & SIMT' },
+      { title: 'Streaming Multiprocessors' },
+      { title: 'What This Means for You' },
+      { title: 'Host/Device & PCIe' },
+      { title: 'When to Use a GPU' },
+      { title: 'Maximizing GPU Utilization' },
+    ],
+    loader: () => import('./cuda-modules/cuda01-intro-gpu.json'),
+  },
+  {
+    id: 'cuda-programming-model',
+    title: 'CUDA Programming Model',
+    description: 'Master the CUDA execution model: kernels, threads, blocks, grids, and 1D/2D indexing patterns.',
+    sections: [
+      { title: 'What is a Kernel?' },
+      { title: 'Thread IDs & Launch Config' },
+      { title: 'Visualizing the Hierarchy' },
+      { title: 'Common Mistakes & Mental Model' },
+      { title: 'The Hello World Kernel' },
+      { title: 'Data Allocation & Transfer' },
+      { title: 'Launch & Retrieve' },
+      { title: 'Under the Hood & Debugging' },
+      { title: 'Why 2D Indexing?' },
+      { title: 'Element-wise Matrix Ops' },
+      { title: 'Image Processing Example' },
+      { title: 'Complete 2D Pattern & Mental Model' },
+    ],
+    loader: () => import('./cuda-modules/cuda02-programming-model.json'),
+  },
+  {
+    id: 'cuda-memory-model',
+    title: 'GPU Memory Hierarchy',
+    description: 'Master the GPU memory hierarchy: global, shared, register, and constant memory. Learn to use shared memory for inter-thread communication, synchronize with syncthreads, and optimize memory access patterns for coalescing.',
+    sections: [
+      { title: 'Why Memory Matters' },
+      { title: 'Registers & Shared Memory' },
+      { title: 'Global & Constant Memory' },
+      { title: 'Optimization Strategy' },
+      { title: 'Shared Memory Basics' },
+      { title: 'Synchronization with syncthreads' },
+      { title: 'Reduction Example' },
+      { title: 'Bank Conflicts & When Not to Use' },
+      { title: 'What is Coalescing?' },
+      { title: 'Coalesced vs Strided Access' },
+      { title: 'AoS vs SoA & Transpose' },
+      { title: 'Rules & Mental Model' },
+    ],
+    loader: () => import('./cuda-modules/cuda03-memory-model.json'),
+  },
+  {
+    id: 'cuda-tiling-matmul',
+    title: 'Tiled Matrix Multiplication',
+    description: 'Build matrix multiplication from scratch on the GPU: start with a naive kernel, analyze its memory bottleneck, then implement the tiled algorithm using shared memory for dramatic speedups. The cornerstone of GPU computing.',
+    sections: [
+      { title: 'Why Matmul Matters' },
+      { title: 'The Memory Problem' },
+      { title: 'Naive Performance & Coalescing' },
+      { title: 'The Tiling Insight' },
+      { title: 'Tile Loading & Phases' },
+      { title: "Thread's-Eye View & Memory Wins" },
+      { title: 'Choosing TILE_SIZE & Sync' },
+      { title: 'Boundary Handling' },
+      { title: 'Production Kernel' },
+      { title: 'Performance vs cuBLAS' },
+      { title: 'When to Roll Your Own' },
+    ],
+    loader: () => import('./cuda-modules/cuda04-tiling-matmul.json'),
+  },
+  {
+    id: 'cuda-thread-execution',
+    title: 'Thread Execution & Warps',
+    description: 'Understand how GPU threads truly execute in groups of 32 called warps, why branch divergence kills performance, and how occupancy determines hardware utilization.',
+    sections: [
+      { title: 'The Warp Illusion' },
+      { title: 'SIMT Scheduling' },
+      { title: 'Warp-Level Thinking' },
+      { title: 'Warp/Lane IDs & Takeaways' },
+      { title: 'Warp-Level Primitives: Shuffle, Vote, Ballot' },
+      { title: 'The Cost of If/Else' },
+      { title: 'Branch Efficiency' },
+      { title: 'Minimizing Divergence: Strategies' },
+      { title: 'Measuring & Nested Divergence' },
+      { title: 'Connection & Takeaways' },
+      { title: 'What is Occupancy?' },
+      { title: 'The Three Resource Limits' },
+      { title: 'Calculator & Guidelines' },
+      { title: 'Measuring & Visualizing Occupancy' },
+    ],
+    loader: () => import('./cuda-modules/cuda05-thread-execution.json'),
+  },
+  {
+    id: 'cuda-performance',
+    title: 'Performance Optimization',
+    description: 'Master GPU performance analysis through memory coalescing, the roofline model for identifying bottlenecks, and systematic profiling techniques to iteratively optimize your CUDA kernels.',
+    sections: [
+      { title: 'Coalescing at the Hardware Level' },
+      { title: 'Row vs Column-Major' },
+      { title: 'Restructuring Techniques' },
+      { title: 'Mistakes & Real Numbers' },
+      { title: 'Why Some Kernels Are Fast' },
+      { title: 'The Roofline Model' },
+      { title: 'AI Calculation in Practice' },
+      { title: 'Roofline vs Reality' },
+      { title: 'Scientific Method for GPU Tuning' },
+      { title: 'Benchmark Harness' },
+      { title: 'Profiling with Nsight Compute' },
+      { title: 'Identifying Bottlenecks' },
+      { title: 'The Optimization Checklist' },
+      { title: 'Complete Example & Roadmap' },
+    ],
+    loader: () => import('./cuda-modules/cuda06-performance.json'),
+  },
+  {
+    id: 'cuda-convolution',
+    title: 'Convolution & Stencil Patterns',
+    description: 'Implement 1D and 2D convolution on the GPU, from naive global memory approaches to optimized tiled implementations using shared memory and constant memory for filter weights.',
+    sections: [
+      { title: 'What is Convolution?' },
+      { title: 'Naive 1D GPU Kernel' },
+      { title: 'Boundaries & Why GPU' },
+      { title: 'From 1D to 2D & Common Filters' },
+      { title: 'Naive 2D Kernel' },
+      { title: 'Boundaries & Practical Choices' },
+      { title: 'Separable Convolutions' },
+      { title: 'The Redundant Load Problem' },
+      { title: 'Loading the Halo' },
+      { title: 'Constant Memory & Simpler Tile' },
+      { title: 'Performance & Bank Conflicts' },
+      { title: 'Halo Mental Model & Hardware' },
+    ],
+    loader: () => import('./cuda-modules/cuda07-convolution.json'),
+  },
+  {
+    id: 'cuda-reduction',
+    title: 'Parallel Reduction',
+    description: 'Learn to sum N numbers in O(log N) parallel steps using tree-based reduction, optimize with sequential addressing and loop unrolling, and handle arrays larger than one block with multi-pass techniques.',
+    sections: [
+      { title: 'Why Reduction Is Hard' },
+      { title: 'Mapping the Tree to GPU' },
+      { title: 'Complexity & Numerics' },
+      { title: 'The Naive Problem & Divergence' },
+      { title: 'Idle Threads & Loop Overhead' },
+      { title: 'Warp Shuffle Last Reduction' },
+      { title: 'Comparison & Summary' },
+      { title: 'The Block Boundary Problem' },
+      { title: 'Atomics & Hybrid Approaches' },
+      { title: 'Tuning Performance' },
+      { title: 'Reductions Beyond Sum' },
+      { title: 'Numerical Stability of Parallel Reduction' },
+      { title: 'Comparison & Beyond Sum' },
+    ],
+    loader: () => import('./cuda-modules/cuda08-reduction.json'),
+  },
+  {
+    id: 'cuda-scan',
+    title: 'Prefix Sum (Scan)',
+    description: 'Master the parallel scan primitive -- the backbone of stream compaction, radix sort, and histogram equalization. Implement both Hillis-Steele and Brent-Kung algorithms.',
+    sections: [
+      { title: 'The Scan Primitive' },
+      { title: 'Applications of Scan' },
+      { title: 'Complexity & Variants' },
+      { title: 'Hillis-Steele: The Doubling-Stride Idea' },
+      { title: 'Hillis-Steele: Complexity & Buffering' },
+      { title: 'Hillis-Steele: CUDA Implementation' },
+      { title: 'Why Hillis-Steele Wastes Work' },
+      { title: 'Brent-Kung: Up-Sweep & Down-Sweep' },
+      { title: 'Brent-Kung: Complexity & Utilization' },
+      { title: 'Brent-Kung: CUDA Implementation' },
+      { title: 'Multi-Block Scan for Large Arrays' },
+      { title: 'Warp-Level Scan, Segmented Scan, and Choosing' },
+    ],
+    loader: () => import('./cuda-modules/cuda09-scan.json'),
+  },
+  {
+    id: 'cuda-histogram-sort',
+    title: 'Histogram and Sorting',
+    description: 'Master atomic operations, build privatized histograms for high throughput, and explore GPU sorting algorithms including bitonic sort, merge sort, and radix sort.',
+    sections: [
+      { title: 'The Race Condition Problem' },
+      { title: 'The Cost of Atomics' },
+      { title: 'When to Use Atomics' },
+      { title: 'The Histogram Problem' },
+      { title: 'Three Histogram Approaches' },
+      { title: 'Performance & Edge Cases' },
+      { title: 'Real-World Example' },
+      { title: 'Why Sort on GPU & Bitonic Intro' },
+      { title: 'Bitonic Details & Merge Sort' },
+      { title: "Radix Sort: GPU's Favorite" },
+      { title: 'Practical Choices' },
+    ],
+    loader: () => import('./cuda-modules/cuda10-histogram-sort.json'),
+  },
+  {
+    id: 'cuda-sparse-graphs',
+    title: 'Sparse Computation and Graphs',
+    description: 'Work with sparse data structures on the GPU: CSR, COO, and ELL matrix formats, sparse matrix-vector multiply (SpMV), and parallel graph algorithms like BFS.',
+    sections: [
+      { title: 'Why Sparsity Matters' },
+      { title: 'COO and CSR' },
+      { title: 'ELL & Hybrid Formats' },
+      { title: 'Memory & Crossover' },
+      { title: 'The SpMV Algorithm' },
+      { title: 'CSR Kernel & Load Imbalance' },
+      { title: 'Solutions: ELL, Warps, Dynamic' },
+      { title: 'Performance & Practical Advice' },
+      { title: 'Graphs as Sparse Matrices' },
+      { title: 'Parallel BFS Strategies' },
+      { title: 'Other Graph Algorithms' },
+      { title: 'Performance & Connections' },
+    ],
+    loader: () => import('./cuda-modules/cuda11-sparse-graphs.json'),
+  },
+  {
+    id: 'cuda-optimization-capstone',
+    title: 'Optimization Capstone: Fast GEMM',
+    description: 'Bring together every optimization technique from the course to build a fast general matrix multiply (GEMM). Compare against cuBLAS and learn when to write custom kernels.',
+    sections: [
+      { title: 'The Optimization Toolkit' },
+      { title: 'Memory & Tiling Recap' },
+      { title: 'Execution & ILP Recap' },
+      { title: 'Patterns & Roofline Recap' },
+      { title: 'The Remaining Gap' },
+      { title: 'Double Buffering & Vectorized Loads' },
+      { title: 'Tile Sizes & Optimized Kernel' },
+      { title: 'Worked Example & The Last 2x' },
+      { title: 'Tensor Cores: The cuBLAS Secret' },
+      { title: 'Mixed Precision, Streams & CUDA Graphs' },
+      { title: 'Measuring GFLOP/s' },
+      { title: 'Profiling Methodology' },
+      { title: 'Custom Kernels vs Libraries' },
+      { title: 'Complete Mental Model' },
+      { title: 'Final Checklist & Where to Go' },
+    ],
+    loader: () => import('./cuda-modules/cuda12-optimization-capstone.json'),
+  },
+]
+
+// Cache for full module content keyed by module id.
+const moduleCache = new Map()
+
+export async function loadModule(id) {
+  if (moduleCache.has(id)) return moduleCache.get(id)
+  const entry = modules.find(m => m.id === id)
+  if (!entry) return null
+  const mod = await entry.loader()
+  const data = mod.default || mod
+  moduleCache.set(id, data)
+  return data
+}

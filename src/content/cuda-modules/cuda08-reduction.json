@@ -171,7 +171,7 @@
         "20 passes (log2 of 10M)"
       ],
       "correct": 2,
-      "explanation": "Pass 1: 10M / 512 = 19,532 blocks -> 19,532 partial sums. Pass 2: 19,532 / 512 = 39 blocks -> 39 partial sums. Pass 3: 39 / 512 = 1 block -> 1 final sum. Three passes is sufficient. The log2(N) figure applies to steps WITHIN a block, not to the number of kernel launches."
+      "explanation": "Pass 1: ceil(10M / 512) = 19,532 blocks -> 19,532 partial sums. Pass 2: ceil(19,532 / 512) = 39 blocks -> 39 partial sums. Pass 3: only 39 partial sums remain; since 39 <= 512, a single block finishes the reduction. Three passes is sufficient. The log2(N) figure applies to steps WITHIN a block, not to the number of kernel launches."
     },
     {
       "question": "On a Volta+ GPU, why is the classic 'no syncthreads in the last warp' trick unsafe?",
@@ -210,7 +210,7 @@
       "question": "How is argmax (returning the INDEX of the maximum) typically implemented as a parallel reduction?",
       "options": [
         "Use cuda.atomic.argmax, a hardware-supported atomic for value+index pairs",
-        "Reduce (value, index) pairs in shared memory: at each step, keep the pair with the larger value, breaking ties by smaller index",
+        "Reduce (value, index) pairs in shared memory: at each step, keep the pair with the larger value, with a deterministic tie-breaker (e.g., smaller index wins) so the operator stays associative",
         "Run a regular max reduction, then linear-scan the array on the CPU to find the index",
         "Argmax cannot be parallelized; it must be done sequentially"
       ],

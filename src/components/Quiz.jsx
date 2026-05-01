@@ -67,7 +67,11 @@ export default function Quiz({ questions, moduleId, onScore }) {
           Question {currentQ + 1} of {questions.length}
         </div>
         <p>{q.question}</p>
-        <div className="quiz-options">
+        <div
+          className="quiz-options"
+          role="radiogroup"
+          aria-label={`Answers for: ${q.question}`}
+        >
           {q.options.map((opt, i) => {
             let cls = 'quiz-option'
             if (answered && i === q.correct) cls += ' correct'
@@ -75,7 +79,20 @@ export default function Quiz({ questions, moduleId, onScore }) {
             else if (!answered && i === selected) cls += ' selected'
 
             return (
-              <div key={i} className={cls} onClick={() => handleSelect(i)}>
+              <div
+                key={i}
+                className={cls}
+                role="radio"
+                aria-checked={selected === i}
+                tabIndex={answered ? -1 : 0}
+                onClick={() => handleSelect(i)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    handleSelect(i)
+                  }
+                }}
+              >
                 <span className="option-letter">{letters[i]}</span>
                 <span>{opt}</span>
               </div>

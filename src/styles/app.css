@@ -19,6 +19,13 @@
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
+/* Global focus indicator for keyboard users (overrides outline:none rules below) */
+*:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
 html, body {
   overflow-x: hidden;
   width: 100%;
@@ -160,11 +167,18 @@ code, pre {
 .heading-with-permalink .permalink {
   opacity: 0;
 }
-.heading-with-permalink:hover .permalink {
+.heading-with-permalink:hover .permalink,
+.heading-with-permalink:focus-within .permalink {
   opacity: 0.55 !important;
 }
-.heading-with-permalink:hover .permalink:hover {
+.heading-with-permalink:hover .permalink:hover,
+.heading-with-permalink .permalink:focus-visible {
   opacity: 1 !important;
+}
+@media (hover: none) {
+  .heading-with-permalink .permalink {
+    opacity: 0.4;
+  }
 }
 
 .sidebar-footer {
@@ -1097,6 +1111,11 @@ code, pre {
   }
 
   .nav-section {
+    display: none;
+  }
+
+  /* Hide vertical subsection treeview inside the horizontal mobile nav strip */
+  .nav-subsections {
     display: none;
   }
 

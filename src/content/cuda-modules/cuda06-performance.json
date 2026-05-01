@@ -167,7 +167,7 @@
       "explanation": "Numba uses Just-In-Time (JIT) compilation for CUDA kernels. The first call to a kernel triggers compilation from Python to PTX to GPU machine code, which can take 50-500ms. The actual kernel might run in 0.1ms. Without warmup, you measure compilation time, not kernel performance. Always run 5-10 warmup iterations before timing."
     },
     {
-      "question": "You measure your kernel achieving 45 GB/s on a T4 GPU (320 GB/s peak bandwidth). You confirmed the kernel is memory-bound. What is the most likely cause?",
+      "question": "You measure your kernel achieving 45 GB/s on a T4 GPU (320 GB/s peak bandwidth). You have already verified reasonable occupancy (>50%) and confirmed the kernel is memory-bound. What is the most likely remaining cause?",
       "options": [
         "Low occupancy (not enough warps)",
         "Warp divergence in branch statements",
@@ -175,7 +175,7 @@
         "Too many kernel launches"
       ],
       "correct": 2,
-      "explanation": "At only 15% of peak bandwidth, the most likely cause is uncoalesced memory access. Uncoalesced patterns waste bandwidth by transferring much more data than needed (each warp might trigger many sector transactions instead of 1). Low occupancy and divergence would not typically reduce bandwidth utilization this severely."
+      "explanation": "At only 15% of peak bandwidth with occupancy already ruled out, the most likely cause is uncoalesced memory access. Uncoalesced patterns waste bandwidth by transferring much more data than needed (each warp might trigger many sector transactions instead of 1). Note that very low occupancy CAN limit bandwidth (too few in-flight memory requests to hide latency), which is why we filtered that out in the question stem."
     },
     {
       "question": "Why is Structure of Arrays (SoA) preferred over Array of Structures (AoS) for GPU programming?",

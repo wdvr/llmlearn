@@ -1,14 +1,23 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import mermaid from 'mermaid'
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
+import python from 'react-syntax-highlighter/dist/esm/languages/prism/python'
+import cpp from 'react-syntax-highlighter/dist/esm/languages/prism/cpp'
+import bash from 'react-syntax-highlighter/dist/esm/languages/prism/bash'
+import javascript from 'react-syntax-highlighter/dist/esm/languages/prism/javascript'
 import Quiz from './Quiz'
 import Exercise from './Exercise'
 import ColabExercise from './ColabExercise'
 import CodeBlock from './CodeBlock'
 import * as CudaDiagrams from './CudaDiagrams'
-import { findModuleCourse } from '../content/courses'
+import { findModuleCourse, loadModule } from '../content/courses'
+
+SyntaxHighlighter.registerLanguage('python', python)
+SyntaxHighlighter.registerLanguage('cpp', cpp)
+SyntaxHighlighter.registerLanguage('bash', bash)
+SyntaxHighlighter.registerLanguage('javascript', javascript)
 
 mermaid.initialize({
   startOnLoad: false,
@@ -93,6 +102,7 @@ function PermalinkIcon({ slug }) {
       href={`#${slug}`}
       onClick={onClick}
       className="permalink"
+      aria-label={copied ? `Link to ${slug} copied` : `Copy link to ${slug}`}
       title={copied ? 'Link copied!' : 'Copy link to this section'}
       style={{
         marginLeft: '8px',
@@ -106,7 +116,7 @@ function PermalinkIcon({ slug }) {
       onMouseEnter={(e) => { if (!copied) e.currentTarget.style.opacity = '0.8' }}
       onMouseLeave={(e) => { if (!copied) e.currentTarget.style.opacity = '0.25' }}
     >
-      {copied ? '✓' : '🔗'}
+      <span aria-hidden="true">{copied ? '✓' : '🔗'}</span>
     </a>
   )
 }
@@ -138,8 +148,9 @@ function renderMarkdown(text) {
         if (Cmp) return <div key={i} style={{ margin: '16px 0', display: 'flex', justifyContent: 'center', overflow: 'auto' }}><Cmp /></div>;
         return <div key={i} style={{ margin: '12px 0', padding: '12px', background: 'var(--bg-tertiary)', borderRadius: '6px', color: '#f85149', fontSize: '13px' }}>Unknown diagram: <code>{name}</code></div>;
       }
-      // Map common aliases to Prism language names
-      const langMap = { cuda: 'cpp', cu: 'cpp', shell: 'bash', sh: 'bash', '': 'text', text: 'text' };
+      // Map common aliases to Prism language names. Only python, cpp, bash, javascript
+      // are registered with PrismLight — anything else falls back to plain text.
+      const langMap = { cuda: 'cpp', cu: 'cpp', c: 'cpp', 'c++': 'cpp', shell: 'bash', sh: 'bash', js: 'javascript', '': 'text', text: 'text' };
       const lang = langMap[tok.lang.toLowerCase()] ?? tok.lang.toLowerCase();
       // Plain (no-lang) fences are usually ASCII diagrams or output — render unhighlighted.
       if (lang === 'text') {
@@ -334,12 +345,34 @@ export default function ModulePage({ modules, completed, onComplete, onQuizScore
   const { id } = useParams()
   const navigate = useNavigate()
 
-  // Scope navigation to the module's course
+  // Scope navigation to the module's course (manifest data only).
   const course = findModuleCourse(id)
   const courseModules = course ? course.modules : modules
-  const module = courseModules.find(m => m.id === id) || modules.find(m => m.id === id)
+  const manifestModule = courseModules.find(m => m.id === id) || modules.find(m => m.id === id)
   const moduleIndex = courseModules.findIndex(m => m.id === id)
   const isColab = course?.exerciseRuntime === 'colab'
+
+  // Full module content (sections.content, quiz, exercise) is dynamic-imported on demand.
+  const [fullModule, setFullModule] = useState(null)
+  const [loadError, setLoadError] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    setFullModule(null)
+    setLoadError(null)
+    if (!id) return
+    loadModule(id).then(data => {
+      if (cancelled) return
+      if (!data) setLoadError('not-found')
+      else setFullModule(data)
+    }).catch(err => {
+      if (!cancelled) setLoadError(err?.message || String(err))
+    })
+    return () => { cancelled = true }
+  }, [id])
+
+  // Use full content once loaded, fall back to manifest while pending.
+  const module = fullModule || manifestModule
 
   useEffect(() => {
     window.scrollTo(0, 0)
@@ -347,7 +380,7 @@ export default function ModulePage({ modules, completed, onComplete, onQuizScore
 
   // Track which section is visible via IntersectionObserver
   useEffect(() => {
-    if (!module) return
+    if (!fullModule) return
     const sections = document.querySelectorAll('.section h3')
     if (!sections.length) return
 
@@ -364,15 +397,30 @@ export default function ModulePage({ modules, completed, onComplete, onQuizScore
 
     sections.forEach(el => observer.observe(el))
     // Set initial section
-    if (onSectionChange && module.sections?.[0]) {
-      onSectionChange(module.sections[0].title)
+    if (onSectionChange && fullModule.sections?.[0]) {
+      onSectionChange(fullModule.sections[0].title)
     }
 
     return () => observer.disconnect()
-  }, [id, module])
+  }, [id, fullModule])
 
-  if (!module) {
+  if (!manifestModule && loadError === 'not-found') {
     return <div className="content"><p>Module not found.</p></div>
+  }
+  if (!module) {
+    return <div className="content"><p>Loading...</p></div>
+  }
+  if (!fullModule) {
+    // Manifest known but content still fetching — show header + skeleton.
+    return (
+      <div className="content">
+        <div className="module-header">
+          <h2>{module.title}</h2>
+          <p>{module.description}</p>
+        </div>
+        <p style={{ color: 'var(--text-muted)' }}>Loading module content...</p>
+      </div>
+    )
   }
 
   const prevModule = moduleIndex > 0 ? courseModules[moduleIndex - 1] : null

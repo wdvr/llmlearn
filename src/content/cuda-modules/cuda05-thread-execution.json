@@ -153,7 +153,7 @@
         "if threadIdx.x > 16: path_A() else: path_B()"
       ],
       "correct": 2,
-      "explanation": "blockIdx.x is the same for ALL threads in a block, so ALL warps in the block take the same branch -- zero divergence. Option A alternates every thread (worst divergence). Option B depends on data (likely divergent). Option D splits warp 0 unevenly (lanes 0-16 take one path, lanes 17-31 take the other) and similarly splits every other warp on the threadIdx.x % 32 boundary -- still causes divergence within affected warps."
+      "explanation": "blockIdx.x is the same for ALL threads in a block, so ALL warps in the block take the same branch -- zero divergence. Option A alternates every thread (worst divergence). Option B depends on data (likely divergent). Option D causes divergence ONLY in warp 0 (lanes 0-16 take one path, lanes 17-31 take the other). All other warps have threadIdx.x >= 32 > 16, so they take a single branch with no divergence. Still, any warp diverging means the answer is not 'zero divergence'."
     },
     {
       "question": "On a T4 GPU with 65,536 registers per SM and a max of 1024 threads per SM, what is the maximum occupancy if your kernel uses 128 registers per thread?",

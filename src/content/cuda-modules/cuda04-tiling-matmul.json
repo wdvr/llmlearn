@@ -171,18 +171,18 @@
         "16 is the maximum tile size supported by shared memory"
       ],
       "correct": 2,
-      "explanation": "TILE_SIZE=16 creates 16x16=256 threads per block (good occupancy, well below the 1024 maximum), uses only 2 x 16 x 16 x 4 = 2 KB of shared memory per block (leaving room for multiple blocks per SM), and provides a 16x reduction in global memory traffic. The warp size is actually 32, not 16."
+      "explanation": "TILE_SIZE=16 creates 16x16=256 threads per block (good occupancy, well below the 1024 maximum), uses only 2 x 16 x 16 x 4 = 2 KB of shared memory per block (leaving room for multiple blocks per SM), and provides a 16x reduction in global memory traffic. The warp size is actually 32, not 16. Production kernels typically use TILE=32 or larger combined with register tiling (Module 12); TILE=16 is the simplest pedagogical choice that demonstrates the technique without overflowing 1024 threads per block."
     },
     {
-      "question": "Our tiled matmul achieves ~15-20% of peak GPU performance. Why does cuBLAS achieve much higher utilization (and what is the catch on T4 specifically)?",
+      "question": "Our tiled matmul achieves ~15-20% of peak GPU performance. What does cuBLAS add on top of basic shared-memory tiling to close most of that gap?",
       "options": [
-        "cuBLAS uses a completely different algorithm",
-        "cuBLAS uses larger tile sizes only",
-        "cuBLAS adds register tiling, double buffering, and tuned tile sizes; on Ampere+ it also uses TF32 Tensor Cores for FP32 GEMM. On Turing (T4) there are no FP32 Tensor Cores, so FP32 cuBLAS tops out around 70-85% of peak rather than 90%+",
-        "cuBLAS bypasses shared memory and uses L2 cache instead"
+        "It uses a fundamentally different algorithm than tiled matmul",
+        "It uses much larger tile sizes and nothing else",
+        "Register tiling, double buffering, and auto-tuned tile dimensions",
+        "It bypasses shared memory and relies entirely on the L2 cache"
       ],
       "correct": 2,
-      "explanation": "cuBLAS uses the same fundamental tiling strategy but adds register tiling (each thread computes a 4x4 or 8x8 subgrid), double buffering (prefetching the next tile while computing with the current one), and auto-tuned tile dimensions. Tensor Core acceleration is architecture-dependent: Ampere+ has TF32 Tensor Cores that accelerate FP32 GEMM; Turing (T4) only has FP16/INT8 Tensor Cores, so pure FP32 GEMM on T4 does not get that boost and lands in the 70-85% range."
+      "explanation": "cuBLAS uses the same fundamental tiling strategy but adds register tiling (each thread computes a 4x4 or 8x8 subgrid), double buffering (prefetching the next tile while computing with the current one), and auto-tuned tile dimensions. Tensor Core acceleration is architecture-dependent: Ampere+ has TF32 Tensor Cores that accelerate FP32 GEMM; Turing (T4) only has FP16/INT8 Tensor Cores, so pure FP32 cuBLAS GEMM on T4 typically tops out around 70-85% of peak rather than 90%+."
     },
     {
       "question": "When should you write a custom matmul kernel instead of using cuBLAS?",

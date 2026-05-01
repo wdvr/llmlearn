@@ -1,9 +1,14 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, Suspense } from 'react'
 import { Routes, Route, Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { courses, allModules, findCourse, findModuleCourse } from './content/courses'
-import ModulePage from './components/ModulePage'
-import PRReview from './components/PRReview'
-import ClaudeChat from './components/ClaudeChat'
+
+const ModulePage = React.lazy(() => import('./components/ModulePage'))
+const PRReview = React.lazy(() => import('./components/PRReview'))
+const ClaudeChat = React.lazy(() => import('./components/ClaudeChat'))
+
+const RouteFallback = () => (
+  <div className="content"><p>Loading...</p></div>
+)
 
 function App() {
   const location = useLocation()
@@ -234,31 +239,35 @@ function App() {
 
       {/* Main content */}
       <main className="main">
-        <Routes>
-          <Route path="/" element={<LandingPage courses={courses} completed={completed} />} />
-          <Route path="/course/:courseId" element={<CoursePage courses={courses} completed={completed} />} />
-          <Route
-            path="/module/:id"
-            element={
-              <ModulePage
-                modules={allModules}
-                completed={completed}
-                onComplete={markComplete}
-                onQuizScore={(moduleId, score, total) => {
-                  const updated = { ...quizScores, [moduleId]: { score, total } }
-                  setQuizScores(updated)
-                  localStorage.setItem('quiz_scores', JSON.stringify(updated))
-                }}
-                onSectionChange={setCurrentSection}
-              />
-            }
-          />
-          <Route path="/prs" element={<PRReview />} />
-        </Routes>
+        <Suspense fallback={<RouteFallback />}>
+          <Routes>
+            <Route path="/" element={<LandingPage courses={courses} completed={completed} />} />
+            <Route path="/course/:courseId" element={<CoursePage courses={courses} completed={completed} />} />
+            <Route
+              path="/module/:id"
+              element={
+                <ModulePage
+                  modules={allModules}
+                  completed={completed}
+                  onComplete={markComplete}
+                  onQuizScore={(moduleId, score, total) => {
+                    const updated = { ...quizScores, [moduleId]: { score, total } }
+                    setQuizScores(updated)
+                    localStorage.setItem('quiz_scores', JSON.stringify(updated))
+                  }}
+                  onSectionChange={setCurrentSection}
+                />
+              }
+            />
+            <Route path="/prs" element={<PRReview />} />
+          </Routes>
+        </Suspense>
       </main>
 
       {/* Claude Chat */}
-      <ClaudeChat isOpen={chatOpen} onClose={() => setChatOpen(false)} appContext={appContext} />
+      <Suspense fallback={null}>
+        <ClaudeChat isOpen={chatOpen} onClose={() => setChatOpen(false)} appContext={appContext} />
+      </Suspense>
       <button className="chat-toggle" onClick={() => setChatOpen(!chatOpen)} title="Ask Claude">
         💬
       </button>

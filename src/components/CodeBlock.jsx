@@ -1,6 +1,15 @@
 import React, { useState, useRef } from 'react'
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
+import python from 'react-syntax-highlighter/dist/esm/languages/prism/python'
+import cpp from 'react-syntax-highlighter/dist/esm/languages/prism/cpp'
+import bash from 'react-syntax-highlighter/dist/esm/languages/prism/bash'
+import javascript from 'react-syntax-highlighter/dist/esm/languages/prism/javascript'
+
+SyntaxHighlighter.registerLanguage('python', python)
+SyntaxHighlighter.registerLanguage('cpp', cpp)
+SyntaxHighlighter.registerLanguage('bash', bash)
+SyntaxHighlighter.registerLanguage('javascript', javascript)
 
 export default function CodeBlock({ code, language = 'python' }) {
   const [copied, setCopied] = useState(false)

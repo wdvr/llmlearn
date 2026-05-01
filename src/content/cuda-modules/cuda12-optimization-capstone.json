@@ -170,13 +170,13 @@
     {
       "question": "A naive GEMM kernel achieves 50 GFLOP/s on a T4. After adding shared memory tiling (16x16), it achieves 500 GFLOP/s. After adding 4x4 register tiling, it achieves 2000 GFLOP/s. cuBLAS achieves 7000 GFLOP/s. What is the remaining approximately 3.5x gap primarily due to?",
       "options": [
-        "The tile size is too small -- using 128x128 tiles in Numba would close the gap entirely",
-        "Numba uses Python overhead for each floating-point operation, adding per-instruction cost",
-        "Low-level optimizations not expressible in Numba: warp-level matrix primitives (WMMA / Tensor Cores), shared memory bank conflict avoidance, fine-grained instruction scheduling, and architecture-specific tuning",
-        "The register-tiled kernel has incorrect synchronization that forces threads to wait unnecessarily"
+        "The tile size is too small; using 128x128 tiles in Numba would close the gap entirely",
+        "Numba adds Python overhead per floating-point op, slowing each instruction",
+        "Low-level optimizations not expressible in Numba (Tensor Cores, bank-conflict avoidance, instruction scheduling)",
+        "The register-tiled kernel has incorrect synchronization that forces threads to wait"
       ],
       "correct": 2,
-      "explanation": "The remaining approximately 3.5x gap between register-tiled Numba GEMM and cuBLAS is due to optimizations that require CUDA C++ or PTX assembly: (1) Warp-level matrix operations (WMMA / Tensor Cores) -- by far the dominant contributor on Volta+ hardware, (2) Bank conflict avoidance in shared memory layout, (3) Assembly-level instruction scheduling to perfectly interleave loads and computes, (4) Architecture-specific tuning with inline PTX. Numba compiles to PTX but does not give you control over these details. Note that Numba does NOT add Python overhead to compiled kernels -- the JIT-compiled code runs as native GPU instructions."
+      "explanation": "The remaining approximately 3.5x gap between register-tiled Numba GEMM and cuBLAS comes from optimizations that require CUDA C++ or PTX assembly: (1) Warp-level matrix operations (WMMA / Tensor Cores) -- by far the dominant contributor on Volta+ hardware, (2) Bank conflict avoidance in shared memory layout, (3) Assembly-level instruction scheduling to perfectly interleave loads and computes, (4) Architecture-specific tuning with inline PTX. Numba compiles to PTX but does not expose these knobs. Important misconception to dispel: Numba does NOT add Python overhead to compiled kernels -- the JIT-compiled code runs as native GPU instructions, just like a CUDA C++ kernel."
     },
     {
       "question": "When should you write a custom CUDA kernel instead of using cuBLAS?",
@@ -209,7 +209,7 @@
         "~64 FLOPs/byte; compute-bound only because of Tensor Cores"
       ],
       "correct": 1,
-      "explanation": "For tiled GEMM, arithmetic intensity scales as TILE_SIZE/4 FLOPs/byte: each pair of float loads (one from A, one from B = 8 bytes) contributes TILE_SIZE multiply-adds (= 2*TILE_SIZE FLOPs). For TILE_SIZE=32 that gives 8 FLOPs/byte, still below the T4's ~25 FLOP/byte ridge point. Basic shared-memory tiling alone is not enough to reach compute-bound territory on a T4. Register-level tiling enlarges the per-thread tile and amortizes shared-memory loads across many FMAs, which is what actually pushes the kernel past the ridge point and into compute-bound regime."
+      "explanation": "TILE/4 estimates ARITHMETIC intensity by counting GLOBAL-memory bytes per FLOP: each pair of float loads from global memory (one from A, one from B = 8 bytes) feeds TILE_SIZE multiply-adds (= 2*TILE_SIZE FLOPs), giving TILE_SIZE/4 FLOP/byte. For TILE_SIZE=32 that's 8 FLOP/byte -- close to but still below the T4's ~25 FLOP/byte ridge point in the simple roofline model. Note that shared-memory loads are NOT counted here (they're on-chip). Register tiling pushes intensity further by amortizing those shared-memory loads across many FMAs in registers, which is what actually pushes the kernel past the ridge into compute-bound territory."
     }
   ],
   "exercise": {

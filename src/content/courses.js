@@ -1,5 +1,5 @@
-import { modules as pytorchModules, curatedPRs } from './modules'
-import { modules as cudaModules } from './cuda-modules'
+import { modules as pytorchModules, curatedPRs, loadModule as loadPytorchModule } from './modules'
+import { modules as cudaModules, loadModule as loadCudaModule } from './cuda-modules'
 
 export const courses = [
   {
@@ -26,10 +26,17 @@ export const courses = [
   },
 ]
 
-// Flat helpers for backward compat and route lookup
+// Flat helpers for backward compat and route lookup. These operate on the
+// manifest only — full module content is loaded on demand via loadModule().
 export const allModules = courses.flatMap(c => c.modules)
 export const findCourse = (courseId) => courses.find(c => c.id === courseId)
 export const findModuleCourse = (moduleId) => courses.find(c => c.modules.some(m => m.id === moduleId))
+
+// Dynamically import the full content for a module (sections.content, quiz, exercise).
+// Returns null if the id is unknown.
+export async function loadModule(id) {
+  return (await loadPytorchModule(id)) || (await loadCudaModule(id))
+}
 
 // Re-export for anything still importing curatedPRs
 export { curatedPRs }

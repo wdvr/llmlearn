@@ -16,6 +16,17 @@ export default defineConfig({
     __BUILD_NUM__: JSON.stringify(buildNum),
     __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
   },
+  build: {
+    chunkSizeWarningLimit: 800,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          mermaid: ['mermaid'],
+          highlighter: ['react-syntax-highlighter'],
+        },
+      },
+    },
+  },
   server: {
     port: 3000,
     proxy: {

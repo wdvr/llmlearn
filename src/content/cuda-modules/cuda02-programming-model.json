@@ -197,7 +197,7 @@
         "Block shape does not affect memory coalescing"
       ],
       "correct": 2,
-      "explanation": "A (32, 8) block lets each warp (32 threads) lie entirely within one row of the block, accessing 32 contiguous elements in row-major memory in a SINGLE coalesced cache-line transaction. (16, 16) has only 16 threads per warp-row, so each warp wraps to the next row and issues 2 transactions instead of 1 -- still common in samples, but slightly suboptimal for memory-bound kernels (this is also the recommendation in Module 6). (1, 256) is the worst: adjacent threads access elements one full row apart, completely uncoalesced -- up to ~32x bandwidth waste."
+      "explanation": "(32, 8) gives each warp 32 contiguous threads in the x-dimension, accessing 32 contiguous floats per warp = exactly one 128-byte transaction. (16, 16) splits each warp across 2 rows, so each warp accesses two 64-byte chunks at different memory addresses -- still coalesced within each chunk but issued as two separate transactions, slightly suboptimal for memory-bound kernels (this is also the recommendation in Module 6). (1, 256) is the worst: adjacent threads access elements one full row apart, completely uncoalesced -- up to ~32x bandwidth waste."
     }
   ],
   "exercise": {
