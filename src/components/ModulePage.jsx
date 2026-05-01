@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import mermaid from 'mermaid'
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import Quiz from './Quiz'
 import Exercise from './Exercise'
 import ColabExercise from './ColabExercise'
@@ -75,6 +77,39 @@ function slugify(s) {
   return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 }
 
+function PermalinkIcon({ slug }) {
+  const [copied, setCopied] = useState(false)
+  const onClick = (e) => {
+    e.preventDefault()
+    const url = `${window.location.origin}${window.location.pathname}${window.location.search}#${slug}`
+    history.replaceState(null, '', `#${slug}`)
+    navigator.clipboard?.writeText(url).catch(() => {})
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
+  return (
+    <a
+      href={`#${slug}`}
+      onClick={onClick}
+      className="permalink"
+      title={copied ? 'Link copied!' : 'Copy link to this section'}
+      style={{
+        marginLeft: '8px',
+        opacity: copied ? 1 : 0.25,
+        textDecoration: 'none',
+        fontSize: '0.7em',
+        verticalAlign: 'middle',
+        transition: 'opacity 0.15s',
+        color: copied ? 'var(--green, #3fb950)' : 'var(--text-muted)',
+      }}
+      onMouseEnter={(e) => { if (!copied) e.currentTarget.style.opacity = '0.8' }}
+      onMouseLeave={(e) => { if (!copied) e.currentTarget.style.opacity = '0.25' }}
+    >
+      {copied ? '✓' : '🔗'}
+    </a>
+  )
+}
+
 // Render markdown-ish content: fenced code blocks, **bold**, `code`, [text](url), lists, tables
 function renderMarkdown(text) {
   // Tokenize fences while preserving language tags. Each fenced block becomes
@@ -95,15 +130,34 @@ function renderMarkdown(text) {
       if (tok.lang === 'mermaid') {
         return <MermaidDiagram key={i} chart={tok.body.trim()} />;
       }
+      // Map common aliases to Prism language names
+      const langMap = { cuda: 'cpp', cu: 'cpp', shell: 'bash', sh: 'bash', '': 'text', text: 'text' };
+      const lang = langMap[tok.lang.toLowerCase()] ?? tok.lang.toLowerCase();
+      // Plain (no-lang) fences are usually ASCII diagrams or output — render unhighlighted.
+      if (lang === 'text') {
+        return (
+          <div key={i} className="code-block" style={{ margin: '12px 0' }}>
+            <pre style={{ padding: '12px 16px', fontSize: '13px', lineHeight: '1.5', overflow: 'auto' }}>
+              <code>{tok.body.replace(/\n$/, '')}</code>
+            </pre>
+          </div>
+        );
+      }
       return (
-        <div key={i} className="code-block" style={{ margin: '12px 0' }}>
-          <pre style={{ padding: '12px 16px', fontSize: '13px', lineHeight: '1.5', overflow: 'auto' }}>
-            <code>{tok.body.replace(/\n$/, '')}</code>
-          </pre>
+        <div key={i} style={{ margin: '12px 0', borderRadius: '6px', overflow: 'hidden' }}>
+          <SyntaxHighlighter
+            language={lang}
+            style={vscDarkPlus}
+            customStyle={{ margin: 0, padding: '12px 16px', fontSize: '13px', lineHeight: '1.5', background: 'var(--code-bg, #1e1e1e)' }}
+            wrapLongLines={false}
+          >
+            {tok.body.replace(/\n$/, '')}
+          </SyntaxHighlighter>
         </div>
       );
     }
-    const part = tok.text;
+    // Strip HTML comments (e.g. <!-- TODO: SVG -->) from prose
+    const part = tok.text.replace(/<!--[\s\S]*?-->/g, '');
     // Even parts are regular content
     const blocks = part.split('\n\n');
     return blocks.map((block, j) => {
@@ -196,7 +250,8 @@ function renderMarkdown(text) {
           4: { fontSize: '14px', fontWeight: 600, marginTop: '16px', marginBottom: '8px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' },
         };
         const Tag = `h${Math.min(level + 2, 6)}`; // offset since section already uses h3
-        return <Tag key={`${i}-${j}`} style={styles[level] || styles[4]}>{inlineMarkdown(text)}</Tag>;
+        const subSlug = slugify(text);
+        return <Tag key={`${i}-${j}`} id={subSlug} style={{...styles[level] || styles[4], scrollMarginTop: '20px'}} className="heading-with-permalink">{inlineMarkdown(text)}<PermalinkIcon slug={subSlug} /></Tag>;
       }
 
       // Check for block with mixed content (headers + paragraphs in same block)
@@ -322,9 +377,14 @@ export default function ModulePage({ modules, completed, onComplete, onQuizScore
         <p>{module.description}</p>
       </div>
 
-      {module.sections.map((section, i) => (
+      {module.sections.map((section, i) => {
+        const slug = slugify(section.title)
+        return (
         <div key={i} className="section">
-          <h3 id={slugify(section.title)} style={{ scrollMarginTop: '20px' }}>{section.title}</h3>
+          <h3 id={slug} style={{ scrollMarginTop: '20px' }} className="heading-with-permalink">
+            {section.title}
+            <PermalinkIcon slug={slug} />
+          </h3>
           <div className="section-content">
             {renderMarkdown(section.content)}
           </div>
@@ -355,7 +415,8 @@ export default function ModulePage({ modules, completed, onComplete, onQuizScore
             </div>
           )}
         </div>
-      ))}
+        )
+      })}
 
       {module.quiz && (
         <Quiz

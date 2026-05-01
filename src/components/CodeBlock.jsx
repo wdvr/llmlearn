@@ -1,4 +1,6 @@
 import React, { useState, useRef } from 'react'
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
 
 export default function CodeBlock({ code, language = 'python' }) {
   const [copied, setCopied] = useState(false)
@@ -160,7 +162,14 @@ _final_stderr = _stderr_buffer.getvalue()
           </button>
         </div>
       </div>
-      <pre><code>{code}</code></pre>
+      <SyntaxHighlighter
+        language={language === 'cuda' || language === 'cu' ? 'cpp' : language}
+        style={vscDarkPlus}
+        customStyle={{ margin: 0, padding: '12px 16px', fontSize: '13px', lineHeight: '1.5', background: 'var(--code-bg, #1e1e1e)' }}
+        wrapLongLines={false}
+      >
+        {code}
+      </SyntaxHighlighter>
 
       {showOutput && (
         <div className="code-output">
