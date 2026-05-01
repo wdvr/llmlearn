@@ -10,8 +10,11 @@ export default function ClaudeChat({ isOpen, onClose, appContext }) {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [model, setModel] = useState(() => localStorage.getItem('chat_model') || 'sonnet')
+  const [needsAuth, setNeedsAuth] = useState(false)
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
+
+  const signInUrl = 'https://auth.thelittleone.rocks/oauth2/start?rd=https://llm.thelittleone.rocks/'
 
   // Persist messages
   useEffect(() => {
@@ -42,6 +45,7 @@ export default function ClaudeChat({ isOpen, onClose, appContext }) {
     setMessages(updatedMessages)
     setInput('')
     setLoading(true)
+    setNeedsAuth(false)
 
     try {
       const history = updatedMessages.filter(m => m.role !== 'system')
@@ -56,6 +60,21 @@ export default function ClaudeChat({ isOpen, onClose, appContext }) {
           model
         })
       })
+
+      // Detect auth-required responses. oauth2-proxy redirects unauthenticated
+      // requests to the sign-in page; fetch follows the 302 transparently and
+      // we end up with an HTML body instead of an SSE stream. Treat anything
+      // that isn't text/event-stream as needing auth — this is more reliable
+      // than relying on status codes (could be 200 from the OAuth page).
+      const contentType = res.headers.get('content-type') || ''
+      const isSSE = contentType.toLowerCase().startsWith('text/event-stream')
+
+      if (!isSSE) {
+        // Roll back the optimistic user message so re-sending after sign-in works.
+        setMessages(messages)
+        setNeedsAuth(true)
+        return
+      }
 
       if (!res.ok) {
         throw new Error('Request failed')
@@ -253,7 +272,7 @@ export default function ClaudeChat({ isOpen, onClose, appContext }) {
       </div>
 
       <div className="chat-messages">
-        {messages.length === 0 && (
+        {messages.length === 0 && !needsAuth && (
           <div className="chat-msg system">
             Ask me anything about PyTorch, LLM architecture, or MPS.
             I know which module you're on and adapt my answers.
@@ -264,6 +283,44 @@ export default function ClaudeChat({ isOpen, onClose, appContext }) {
             {msg.role === 'assistant' ? formatContent(msg.content) : msg.content}
           </div>
         ))}
+        {needsAuth && (
+          <div
+            className="chat-msg system"
+            style={{
+              padding: '16px',
+              border: '1px solid var(--border)',
+              borderRadius: '8px',
+              background: 'var(--bg-tertiary)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
+              alignItems: 'flex-start'
+            }}
+          >
+            <div style={{ fontWeight: 600, color: 'var(--text)' }}>
+              Sign in to chat
+            </div>
+            <div style={{ color: 'var(--text-muted)', fontSize: '13px', lineHeight: 1.5 }}>
+              You need to sign in to use the chat. After signing in you'll
+              return here and your message will be ready to send again.
+            </div>
+            <a
+              href={signInUrl}
+              style={{
+                display: 'inline-block',
+                background: 'var(--accent)',
+                color: 'white',
+                padding: '8px 16px',
+                borderRadius: '6px',
+                textDecoration: 'none',
+                fontWeight: 600,
+                fontSize: '13px'
+              }}
+            >
+              Sign in
+            </a>
+          </div>
+        )}
         {loading && (
           <div className="chat-msg assistant">
             <div className="loading" style={{ padding: '4px 0' }}>

@@ -10,6 +10,7 @@ import javascript from 'react-syntax-highlighter/dist/esm/languages/prism/javasc
 import Quiz from './Quiz'
 import Exercise from './Exercise'
 import ColabExercise from './ColabExercise'
+import LocalExercise from './LocalExercise'
 import CodeBlock from './CodeBlock'
 import * as CudaDiagrams from './CudaDiagrams'
 import { findModuleCourse, loadModule } from '../content/courses'
@@ -351,6 +352,7 @@ export default function ModulePage({ modules, completed, onComplete, onQuizScore
   const manifestModule = courseModules.find(m => m.id === id) || modules.find(m => m.id === id)
   const moduleIndex = courseModules.findIndex(m => m.id === id)
   const isColab = course?.exerciseRuntime === 'colab'
+  const isLocal = course?.exerciseRuntime === 'local'
 
   // Full module content (sections.content, quiz, exercise) is dynamic-imported on demand.
   const [fullModule, setFullModule] = useState(null)
@@ -482,11 +484,17 @@ export default function ModulePage({ modules, completed, onComplete, onQuizScore
         />
       )}
 
-      {module.exercise && (
-        isColab || module.exercise.colabUrl
-          ? <ColabExercise exercise={module.exercise} />
-          : <Exercise exercise={module.exercise} />
-      )}
+      {module.exercise && (() => {
+        // Per-exercise opt-in via `runtime: 'local' | 'colab'` overrides the course default.
+        const runtime = module.exercise.runtime || (isLocal ? 'local' : null)
+        if (runtime === 'local') {
+          return <LocalExercise exercise={module.exercise} moduleId={module.id} />
+        }
+        if (runtime === 'colab' || isColab || module.exercise.colabUrl) {
+          return <ColabExercise exercise={module.exercise} />
+        }
+        return <Exercise exercise={module.exercise} />
+      })()}
 
       <div className="module-nav">
         {prevModule ? (
