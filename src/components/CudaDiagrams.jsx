@@ -1301,6 +1301,1238 @@ export const ThreadTileGrid16x16 = () => {
   )
 }
 
+// =========================================================================
+// FloatFormatBits — PyTorch Module 1: dtype anatomy (sign/exponent/mantissa)
+// =========================================================================
+export const FloatFormatBits = () => {
+  const W = 720, H = 320
+  const padL = 90, padR = 130
+  const stripW = W - padL - padR // pixels for 64 bits
+  const bitPx = stripW / 64
+  const stripH = 30
+  const gap = 18
+
+  const formats = [
+    { name: 'fp64', sign: 1, exp: 11, mant: 52, tag: 'Range ~10^±308 · Not on MPS', tagColor: COLORS.red },
+    { name: 'fp32', sign: 1, exp: 8,  mant: 23, tag: 'Default · Range ~10^±38',   tagColor: COLORS.muted },
+    { name: 'bf16', sign: 1, exp: 8,  mant: 7,  tag: 'Same range as fp32 · Training friendly', tagColor: COLORS.green, badge: 'range' },
+    { name: 'fp16', sign: 1, exp: 5,  mant: 10, tag: 'Range ~10^±5 · Underflow risk', tagColor: COLORS.orange, badge: 'precision' },
+  ]
+
+  const startY = 50
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={wrapperStyle(720)} role="img" aria-labelledby="ffb-title ffb-desc">
+      <title id="ffb-title">Floating-point dtype anatomy</title>
+      <desc id="ffb-desc">Bit-strip comparison of fp64, fp32, bf16, and fp16 showing how sign, exponent, and mantissa bits divide each format. bf16 trades mantissa precision for fp32-equivalent exponent range; fp16 has narrow range and underflows.</desc>
+
+      <text x={W / 2} y={24} fontFamily={FONT} fontSize="14" fill={COLORS.text} textAnchor="middle" fontWeight="600">Floating-Point Format Anatomy: Sign · Exponent · Mantissa</text>
+
+      {formats.map((f, i) => {
+        const y = startY + i * (stripH + gap)
+        const total = f.sign + f.exp + f.mant
+        const x0 = padL
+        const wSign = f.sign * bitPx
+        const wExp = f.exp * bitPx
+        const wMant = f.mant * bitPx
+        const totalW = wSign + wExp + wMant
+        return (
+          <g key={f.name}>
+            {/* dtype label on left */}
+            <text x={padL - 10} y={y + stripH / 2 + 4} fontFamily={MONO} fontSize="13" fill={COLORS.text} textAnchor="end">{f.name}</text>
+
+            {/* sign field */}
+            <rect x={x0} y={y} width={wSign} height={stripH} fill={COLORS.red} stroke={COLORS.bg} />
+            {/* exponent field */}
+            <rect x={x0 + wSign} y={y} width={wExp} height={stripH} fill={COLORS.orange} stroke={COLORS.bg} />
+            {/* mantissa field */}
+            <rect x={x0 + wSign + wExp} y={y} width={wMant} height={stripH} fill={COLORS.accent} stroke={COLORS.bg} />
+
+            {/* bit count labels inside fields if wide enough */}
+            {wExp > 18 && (
+              <text x={x0 + wSign + wExp / 2} y={y + stripH / 2 + 4} fontFamily={MONO} fontSize="11" fill="#fff" textAnchor="middle">{f.exp}</text>
+            )}
+            {wMant > 18 && (
+              <text x={x0 + wSign + wExp + wMant / 2} y={y + stripH / 2 + 4} fontFamily={MONO} fontSize="11" fill="#fff" textAnchor="middle">{f.mant}</text>
+            )}
+
+            {/* total bits label on right of strip */}
+            <text x={x0 + totalW + 8} y={y + stripH / 2 + 4} fontFamily={MONO} fontSize="11" fill={COLORS.muted}>{total} bits</text>
+
+            {/* tag below strip */}
+            <text x={x0} y={y + stripH + 13} fontFamily={FONT} fontSize="10" fill={f.tagColor}>{f.tag}</text>
+
+            {/* badge */}
+            {f.badge && (
+              <g>
+                <rect x={W - padR + 8} y={y + 4} width={70} height={stripH - 8} rx="4" fill={f.badge === 'range' ? COLORS.green : COLORS.orange} fillOpacity="0.18" stroke={f.badge === 'range' ? COLORS.green : COLORS.orange} />
+                <text x={W - padR + 43} y={y + stripH / 2 + 4} fontFamily={FONT} fontSize="10" fill={f.badge === 'range' ? COLORS.green : COLORS.orange} textAnchor="middle" fontWeight="600">{f.badge}</text>
+              </g>
+            )}
+          </g>
+        )
+      })}
+
+      {/* axis with bit ticks */}
+      {(() => {
+        const axisY = startY + formats.length * (stripH + gap) + 4
+        const ticks = [0, 16, 32, 48, 64]
+        return (
+          <g>
+            <line x1={padL} y1={axisY} x2={padL + 64 * bitPx} y2={axisY} stroke={COLORS.muted} />
+            {ticks.map(t => (
+              <g key={t}>
+                <line x1={padL + t * bitPx} y1={axisY} x2={padL + t * bitPx} y2={axisY + 4} stroke={COLORS.muted} />
+                <text x={padL + t * bitPx} y={axisY + 16} fontFamily={MONO} fontSize="10" fill={COLORS.muted} textAnchor="middle">{t}</text>
+              </g>
+            ))}
+            <text x={padL + 32 * bitPx} y={axisY + 30} fontFamily={FONT} fontSize="11" fill={COLORS.muted} textAnchor="middle">bit position</text>
+          </g>
+        )
+      })()}
+
+      {/* legend */}
+      <g transform={`translate(${padL}, ${H - 14})`}>
+        <rect x="0" y="-9" width="10" height="10" fill={COLORS.red} />
+        <text x="14" y="0" fontFamily={FONT} fontSize="10" fill={COLORS.text}>sign</text>
+        <rect x="60" y="-9" width="10" height="10" fill={COLORS.orange} />
+        <text x="74" y="0" fontFamily={FONT} fontSize="10" fill={COLORS.text}>exponent (range)</text>
+        <rect x="200" y="-9" width="10" height="10" fill={COLORS.accent} />
+        <text x="214" y="0" fontFamily={FONT} fontSize="10" fill={COLORS.text}>mantissa (precision)</text>
+      </g>
+    </svg>
+  )
+}
+
+// =========================================================================
+// VanishingGradientChart — PyTorch Module 2: gradient magnitude vs depth
+// =========================================================================
+export const VanishingGradientChart = () => {
+  const W = 720, H = 340
+  const padL = 70, padR = 30, padT = 40, padB = 60
+  const plotW = W - padL - padR
+  const plotH = H - padT - padB
+
+  // Log10 scale on Y from 1.0 down to 1e-8
+  const logMax = 0, logMin = -8
+  const yScale = v => padT + (logMax - Math.log10(v)) / (logMax - logMin) * plotH
+
+  const depths = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+  const sigmoid = depths.map(n => Math.pow(0.25, n))
+  const relu = depths.map(() => 1.0)
+
+  const groupW = plotW / depths.length
+  const barW = (groupW - 8) / 2
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={wrapperStyle(720)} role="img" aria-labelledby="vg-title vg-desc">
+      <title id="vg-title">Vanishing Gradients Through Deep Sigmoid Stack</title>
+      <desc id="vg-desc">Bar chart on a log Y-axis comparing gradient magnitude at each layer for a sigmoid-activated chain (decays as 0.25^n) versus a ReLU chain (constant 1). Sigmoid bars sink below the underflow line by depth 10, while ReLU bars stay flat at 1.</desc>
+
+      <text x={W / 2} y={20} fontFamily={FONT} fontSize="13" fill={COLORS.text} textAnchor="middle" fontWeight="600">Gradient magnitude vs depth (chain of activation derivatives)</text>
+
+      {/* axes */}
+      <line x1={padL} y1={padT} x2={padL} y2={padT + plotH} stroke={COLORS.muted} />
+      <line x1={padL} y1={padT + plotH} x2={padL + plotW} y2={padT + plotH} stroke={COLORS.muted} />
+
+      {/* Y log gridlines */}
+      {[0, -1, -2, -3, -4, -5, -6, -7, -8].map(e => {
+        const y = padT + (logMax - e) / (logMax - logMin) * plotH
+        return (
+          <g key={e}>
+            <line x1={padL} y1={y} x2={padL + plotW} y2={y} stroke={COLORS.grid} strokeDasharray="2 4" />
+            <text x={padL - 6} y={y + 4} fontFamily={MONO} fontSize="10" fill={COLORS.muted} textAnchor="end">10{'⁻'}{Math.abs(e) || ''}{e === 0 ? '⁰' : ''}</text>
+          </g>
+        )
+      })}
+
+      {/* underflow zone */}
+      <line x1={padL} y1={yScale(1e-6)} x2={padL + plotW} y2={yScale(1e-6)} stroke={COLORS.red} strokeDasharray="6 4" strokeWidth="1.5" />
+      <text x={padL + plotW - 6} y={yScale(1e-6) - 4} fontFamily={FONT} fontSize="10" fill={COLORS.red} textAnchor="end">underflow zone (fp32 ≈ 10⁻⁷)</text>
+
+      {/* bars */}
+      {depths.map((d, i) => {
+        const x = padL + i * groupW + 4
+        const sBar = sigmoid[i]
+        const rBar = relu[i]
+        const sH = padT + plotH - yScale(sBar)
+        const rH = padT + plotH - yScale(rBar)
+        return (
+          <g key={d}>
+            <rect x={x} y={yScale(sBar)} width={barW} height={Math.max(1, sH)} fill={COLORS.red} opacity="0.85" />
+            <rect x={x + barW + 2} y={yScale(rBar)} width={barW} height={Math.max(1, rH)} fill={COLORS.green} opacity="0.85" />
+            <text x={x + barW + 1} y={padT + plotH + 14} fontFamily={MONO} fontSize="10" fill={COLORS.muted} textAnchor="middle">{d}</text>
+          </g>
+        )
+      })}
+
+      {/* axis labels */}
+      <text x={padL + plotW / 2} y={H - 18} fontFamily={FONT} fontSize="11" fill={COLORS.text} textAnchor="middle">layer depth</text>
+      <text x={20} y={padT + plotH / 2} fontFamily={FONT} fontSize="11" fill={COLORS.text} textAnchor="middle" transform={`rotate(-90 20 ${padT + plotH / 2})`}>gradient magnitude (log)</text>
+
+      {/* legend */}
+      <g transform={`translate(${padL + plotW - 200}, ${padT + 6})`}>
+        <rect x="0" y="0" width="10" height="10" fill={COLORS.red} opacity="0.85" />
+        <text x="14" y="9" fontFamily={FONT} fontSize="11" fill={COLORS.text}>sigmoid (×0.25/layer)</text>
+        <rect x="0" y="16" width="10" height="10" fill={COLORS.green} opacity="0.85" />
+        <text x="14" y="25" fontFamily={FONT} fontSize="11" fill={COLORS.text}>ReLU (active = 1)</text>
+      </g>
+    </svg>
+  )
+}
+
+// =========================================================================
+// EmbeddingLookup — PyTorch Module 4: token + position embedding lookup
+// =========================================================================
+export const EmbeddingLookup = () => {
+  const W = 760, H = 380
+
+  const tokenIds = [17, 482, 9, 311]
+  const posIds = [0, 1, 2, 3]
+
+  // Token embedding matrix E
+  const ex = 60, ey = 70, ew = 60, eh = 230
+  // Highlighted token rows (within E)
+  const tokenRowIdx = [2, 7, 11, 16]  // visual placeholder positions out of ~22 rows shown
+  const rowsShown = 22
+  const rowH = eh / rowsShown
+
+  // Position matrix P
+  const px = 460, py = 70, pw = 50, ph = 130
+  const pRowsShown = 12
+  const pRowH = ph / pRowsShown
+  const posRowIdx = [0, 1, 2, 3]
+
+  // Extracted (T,d) tiles
+  const tokTileX = 200, tokTileY = 100
+  const tokTileW = 170, tokTileH = 60
+  const posTileX = 540, posTileY = 100
+  const posTileW = 170, posTileH = 60
+
+  // Final tile
+  const finalTileX = 220, finalTileY = 290
+  const finalTileW = 320, finalTileH = 56
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={wrapperStyle(760)} role="img" aria-labelledby="el-title el-desc">
+      <title id="el-title">Token + Position Embedding Lookup</title>
+      <desc id="el-desc">Token IDs index into the embedding matrix E (V×d) producing a (T,d) tile. Position IDs index a separate position matrix P (Tmax×d). The two tiles are summed to form the model input x of shape (B,T,d).</desc>
+
+      {/* Title */}
+      <text x={W / 2} y={20} fontFamily={FONT} fontSize="13" fill={COLORS.text} textAnchor="middle" fontWeight="600">Token + Position Embeddings → Model Input</text>
+
+      {/* Token id row */}
+      <text x={ex} y={50} fontFamily={MONO} fontSize="11" fill={COLORS.muted}>token ids (B=1, T=4)</text>
+      {tokenIds.map((t, i) => (
+        <g key={i}>
+          <rect x={ex + i * 30} y={54} width={26} height={18} fill={COLORS.panel} stroke={COLORS.green} />
+          <text x={ex + i * 30 + 13} y={67} fontFamily={MONO} fontSize="10" fill={COLORS.text} textAnchor="middle">{t}</text>
+        </g>
+      ))}
+
+      {/* Token embedding matrix E */}
+      <rect x={ex} y={ey + 15} width={ew} height={eh} fill={COLORS.panel} stroke={COLORS.muted} />
+      {Array.from({ length: rowsShown }).map((_, i) => (
+        <line key={i} x1={ex} y1={ey + 15 + i * rowH} x2={ex + ew} y2={ey + 15 + i * rowH} stroke={COLORS.grid} strokeWidth="0.5" />
+      ))}
+      {tokenRowIdx.map((r, i) => (
+        <rect key={i} x={ex} y={ey + 15 + r * rowH} width={ew} height={rowH} fill={COLORS.green} fillOpacity="0.6" stroke={COLORS.green} />
+      ))}
+      <text x={ex + ew / 2} y={ey + eh + 32} fontFamily={MONO} fontSize="10" fill={COLORS.muted} textAnchor="middle">E (V=10000, d=768)</text>
+
+      {/* Arrows from token ids to highlighted rows */}
+      {tokenRowIdx.map((r, i) => (
+        <line key={i} x1={ex + i * 30 + 13} y1={72} x2={ex + ew / 2} y2={ey + 15 + r * rowH + rowH / 2} stroke={COLORS.green} strokeOpacity="0.5" strokeWidth="1" />
+      ))}
+
+      {/* Token tile (T, d) */}
+      <rect x={tokTileX} y={tokTileY} width={tokTileW} height={tokTileH} fill={COLORS.green} fillOpacity="0.18" stroke={COLORS.green} />
+      <text x={tokTileX + tokTileW / 2} y={tokTileY + 24} fontFamily={MONO} fontSize="11" fill={COLORS.text} textAnchor="middle">token_embed</text>
+      <text x={tokTileX + tokTileW / 2} y={tokTileY + 42} fontFamily={MONO} fontSize="10" fill={COLORS.muted} textAnchor="middle">(B, T=4, d=768)</text>
+      {/* arrow E -> token tile */}
+      <line x1={ex + ew + 4} y1={ey + 80} x2={tokTileX - 4} y2={tokTileY + tokTileH / 2} stroke={COLORS.green} strokeWidth="1.5" markerEnd="url(#elArrow)" />
+
+      {/* Position id row */}
+      <text x={px} y={50} fontFamily={MONO} fontSize="11" fill={COLORS.muted}>position ids (T=4)</text>
+      {posIds.map((t, i) => (
+        <g key={i}>
+          <rect x={px + i * 30} y={54} width={26} height={18} fill={COLORS.panel} stroke={COLORS.orange} />
+          <text x={px + i * 30 + 13} y={67} fontFamily={MONO} fontSize="10" fill={COLORS.text} textAnchor="middle">{t}</text>
+        </g>
+      ))}
+
+      {/* Position embedding matrix P */}
+      <rect x={px} y={py + 15} width={pw} height={ph} fill={COLORS.panel} stroke={COLORS.muted} />
+      {Array.from({ length: pRowsShown }).map((_, i) => (
+        <line key={i} x1={px} y1={py + 15 + i * pRowH} x2={px + pw} y2={py + 15 + i * pRowH} stroke={COLORS.grid} strokeWidth="0.5" />
+      ))}
+      {posRowIdx.map((r, i) => (
+        <rect key={i} x={px} y={py + 15 + r * pRowH} width={pw} height={pRowH} fill={COLORS.orange} fillOpacity="0.6" stroke={COLORS.orange} />
+      ))}
+      <text x={px + pw / 2} y={py + ph + 32} fontFamily={MONO} fontSize="10" fill={COLORS.muted} textAnchor="middle">P (T_max=2048, d=768)</text>
+
+      {/* Position tile */}
+      <rect x={posTileX} y={posTileY} width={posTileW} height={posTileH} fill={COLORS.orange} fillOpacity="0.18" stroke={COLORS.orange} />
+      <text x={posTileX + posTileW / 2} y={posTileY + 24} fontFamily={MONO} fontSize="11" fill={COLORS.text} textAnchor="middle">pos_embed</text>
+      <text x={posTileX + posTileW / 2} y={posTileY + 42} fontFamily={MONO} fontSize="10" fill={COLORS.muted} textAnchor="middle">(B, T=4, d=768)</text>
+      <line x1={px + pw + 4} y1={py + 50} x2={posTileX - 4} y2={posTileY + posTileH / 2} stroke={COLORS.orange} strokeWidth="1.5" markerEnd="url(#elArrowO)" />
+
+      {/* Plus sign */}
+      <text x={W / 2} y={tokTileY + tokTileH + 80} fontFamily={FONT} fontSize="32" fill={COLORS.accent} textAnchor="middle" fontWeight="700">+</text>
+
+      {/* Arrows from tiles down to plus */}
+      <line x1={tokTileX + tokTileW / 2} y1={tokTileY + tokTileH + 4} x2={W / 2 - 14} y2={tokTileY + tokTileH + 60} stroke={COLORS.green} strokeWidth="1.5" />
+      <line x1={posTileX + posTileW / 2} y1={posTileY + posTileH + 4} x2={W / 2 + 14} y2={posTileY + posTileH + 60} stroke={COLORS.orange} strokeWidth="1.5" />
+
+      {/* Final tile */}
+      <rect x={finalTileX} y={finalTileY} width={finalTileW} height={finalTileH} fill={COLORS.accent} fillOpacity="0.18" stroke={COLORS.accent} />
+      <text x={finalTileX + finalTileW / 2} y={finalTileY + 22} fontFamily={MONO} fontSize="11" fill={COLORS.text} textAnchor="middle">x = token_embed + pos_embed</text>
+      <text x={finalTileX + finalTileW / 2} y={finalTileY + 40} fontFamily={MONO} fontSize="10" fill={COLORS.muted} textAnchor="middle">(B, T=4, d=768)</text>
+
+      <defs>
+        <marker id="elArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0,0 L10,5 L0,10 z" fill={COLORS.green} />
+        </marker>
+        <marker id="elArrowO" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0,0 L10,5 L0,10 z" fill={COLORS.orange} />
+        </marker>
+      </defs>
+    </svg>
+  )
+}
+
+// =========================================================================
+// SingleHeadAttention — PyTorch Module 4: scaled dot-product attention
+// =========================================================================
+export const SingleHeadAttention = () => {
+  const W = 800, H = 420
+
+  const tile = (x, y, w, h, label, shape, color) => (
+    <g>
+      <rect x={x} y={y} width={w} height={h} fill={color} fillOpacity="0.18" stroke={color} />
+      <text x={x + w / 2} y={y + h / 2 - 2} fontFamily={MONO} fontSize="12" fill={COLORS.text} textAnchor="middle" fontWeight="600">{label}</text>
+      <text x={x + w / 2} y={y + h / 2 + 14} fontFamily={MONO} fontSize="10" fill={COLORS.muted} textAnchor="middle">{shape}</text>
+    </g>
+  )
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={wrapperStyle(800)} role="img" aria-labelledby="sha-title sha-desc">
+      <title id="sha-title">Single-Head Scaled Dot-Product Attention</title>
+      <desc id="sha-desc">Input x is projected by W_q, W_k, W_v into Q, K, V. Q times K transpose scaled by sqrt(d_k) gives an attention score matrix; row-wise softmax produces attention weights alpha; alpha times V yields the output.</desc>
+
+      <text x={W / 2} y={22} fontFamily={FONT} fontSize="13" fill={COLORS.text} textAnchor="middle" fontWeight="600">Scaled Dot-Product Attention (single head)</text>
+
+      {/* Input x */}
+      {tile(20, 170, 110, 60, 'x', '(B, T, d_model)', COLORS.accent)}
+
+      {/* Projection labels */}
+      <text x={170} y={130} fontFamily={MONO} fontSize="11" fill={COLORS.muted}>W_q</text>
+      <text x={170} y={205} fontFamily={MONO} fontSize="11" fill={COLORS.muted}>W_k</text>
+      <text x={170} y={290} fontFamily={MONO} fontSize="11" fill={COLORS.muted}>W_v</text>
+
+      {/* Arrows from x to Q,K,V */}
+      <line x1={130} y1={195} x2={210} y2={120} stroke={COLORS.purple} strokeWidth="1.5" markerEnd="url(#shArrowP)" />
+      <line x1={130} y1={200} x2={210} y2={200} stroke={COLORS.orange} strokeWidth="1.5" markerEnd="url(#shArrowO)" />
+      <line x1={130} y1={205} x2={210} y2={290} stroke={COLORS.green} strokeWidth="1.5" markerEnd="url(#shArrowG)" />
+
+      {/* Q, K, V tiles */}
+      {tile(210, 100, 100, 50, 'Q', '(B, T, d_k)', COLORS.purple)}
+      {tile(210, 175, 100, 50, 'K', '(B, T, d_k)', COLORS.orange)}
+      {tile(210, 270, 100, 50, 'V', '(B, T, d_k)', COLORS.green)}
+
+      {/* Scores box (Q · K^T) */}
+      <line x1={310} y1={125} x2={400} y2={155} stroke={COLORS.purple} strokeWidth="1.5" />
+      <line x1={310} y1={200} x2={400} y2={170} stroke={COLORS.orange} strokeWidth="1.5" />
+      {tile(400, 140, 130, 60, 'scores', 'Q·Kᵀ / √d_k  (B, T, T)', COLORS.yellow)}
+
+      {/* Softmax */}
+      <line x1={465} y1={200} x2={465} y2={225} stroke={COLORS.muted} strokeWidth="1.5" markerEnd="url(#shArrowM)" />
+      {tile(400, 225, 130, 44, 'softmax', 'row-wise → α', COLORS.yellow)}
+
+      {/* alpha tile */}
+      <line x1={465} y1={269} x2={465} y2={293} stroke={COLORS.muted} strokeWidth="1.5" markerEnd="url(#shArrowM)" />
+      {tile(400, 293, 130, 44, 'α', '(B, T, T)', COLORS.yellow)}
+
+      {/* alpha · V -> output */}
+      <line x1={310} y1={295} x2={400} y2={315} stroke={COLORS.green} strokeWidth="1.5" />
+      <line x1={530} y1={315} x2={620} y2={250} stroke={COLORS.accent} strokeWidth="1.5" markerEnd="url(#shArrowA)" />
+      {tile(620, 220, 150, 60, 'out = α·V', '(B, T, d_k)', COLORS.accent)}
+
+      {/* Causal mask inset */}
+      <g transform="translate(610, 30)">
+        <text x="65" y="0" fontFamily={FONT} fontSize="10" fill={COLORS.muted} textAnchor="middle">causal mask: −∞ above diagonal</text>
+        {Array.from({ length: 6 }).map((_, i) =>
+          Array.from({ length: 6 }).map((_, j) => (
+            <rect key={`${i}-${j}`} x={20 + j * 14} y={8 + i * 14} width={13} height={13}
+              fill={j > i ? COLORS.grid : COLORS.yellow} fillOpacity={j > i ? 0.3 : 0.55} stroke={COLORS.bg} strokeWidth="0.5" />
+          ))
+        )}
+      </g>
+
+      <defs>
+        <marker id="shArrowP" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill={COLORS.purple} /></marker>
+        <marker id="shArrowO" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill={COLORS.orange} /></marker>
+        <marker id="shArrowG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill={COLORS.green} /></marker>
+        <marker id="shArrowM" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill={COLORS.muted} /></marker>
+        <marker id="shArrowA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill={COLORS.accent} /></marker>
+      </defs>
+    </svg>
+  )
+}
+
+// =========================================================================
+// AttentionScaleHistogram — PyTorch Module 4: why √d_k scaling
+// =========================================================================
+export const AttentionScaleHistogram = () => {
+  const W = 720, H = 320
+  const padT = 40, padB = 70
+  const panelW = (W - 60) / 2
+  const plotH = H - padT - padB
+
+  // Without scaling: very peaked (one near 1.0, rest near 0)
+  const without = [0.78, 0.04, 0.03, 0.025, 0.02, 0.015, 0.012, 0.01, 0.008, 0.008, 0.005, 0.005, 0.003, 0.003, 0.002, 0.002, 0.001, 0.001, 0.001, 0.001]
+  // With scaling: smoother distribution
+  const withS = [0.04, 0.06, 0.08, 0.10, 0.12, 0.13, 0.12, 0.10, 0.08, 0.06, 0.04, 0.03, 0.02, 0.015, 0.01, 0.008, 0.005, 0.003, 0.002, 0.001]
+
+  const drawPanel = (xOff, title, data, color, annotation) => {
+    const padL = 30
+    const innerW = panelW - padL - 20
+    const binW = innerW / data.length
+    const yMax = Math.max(...data) * 1.1
+    const bars = data.map((v, i) => {
+      const h = (v / yMax) * plotH
+      return (
+        <rect key={i} x={xOff + padL + i * binW + 1} y={padT + plotH - h} width={binW - 2} height={h} fill={color} opacity="0.85" />
+      )
+    })
+    return (
+      <g>
+        <text x={xOff + panelW / 2} y={padT - 16} fontFamily={FONT} fontSize="12" fill={COLORS.text} textAnchor="middle" fontWeight="600">{title}</text>
+        {/* axes */}
+        <line x1={xOff + padL} y1={padT} x2={xOff + padL} y2={padT + plotH} stroke={COLORS.muted} />
+        <line x1={xOff + padL} y1={padT + plotH} x2={xOff + padL + innerW} y2={padT + plotH} stroke={COLORS.muted} />
+        {bars}
+        <text x={xOff + padL} y={padT + plotH + 14} fontFamily={MONO} fontSize="9" fill={COLORS.muted}>0</text>
+        <text x={xOff + padL + innerW} y={padT + plotH + 14} fontFamily={MONO} fontSize="9" fill={COLORS.muted} textAnchor="end">1</text>
+        <text x={xOff + padL + innerW / 2} y={padT + plotH + 28} fontFamily={FONT} fontSize="10" fill={COLORS.muted} textAnchor="middle">softmax value</text>
+        <text x={xOff + panelW / 2} y={padT + plotH + 50} fontFamily={FONT} fontSize="10" fill={color} textAnchor="middle" fontStyle="italic">{annotation}</text>
+      </g>
+    )
+  }
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={wrapperStyle(720)} role="img" aria-labelledby="ash-title ash-desc">
+      <title id="ash-title">Why Scale by 1/√d_k</title>
+      <desc id="ash-desc">Two histograms of softmax outputs for d_k=64. Without scaling the distribution is sharp and one-hot-like, killing gradients. With 1/√d_k scaling the distribution is smooth and gradients flow.</desc>
+
+      <text x={W / 2} y={20} fontFamily={FONT} fontSize="13" fill={COLORS.text} textAnchor="middle" fontWeight="600">Distribution of softmax(QKᵀ) values, d_k = 64</text>
+
+      {drawPanel(20, 'Without 1/√d_k', without, COLORS.red, 'Sharp; gradient ≈ 0')}
+      {drawPanel(40 + panelW, 'With 1/√d_k', withS, COLORS.green, 'Smooth; gradients flow')}
+
+      <text x={W / 2} y={H - 8} fontFamily={FONT} fontSize="10" fill={COLORS.muted} textAnchor="middle">Dot-product variance grows as d_k → softmax saturates. Scaling restores variance to ~1.</text>
+    </svg>
+  )
+}
+
+// =========================================================================
+// MultiHeadAttentionLayout — PyTorch Module 5: split, attend, concat
+// =========================================================================
+export const MultiHeadAttentionLayout = () => {
+  const W = 880, H = 480
+  const headColors = [COLORS.purple, COLORS.accent, COLORS.green, COLORS.orange, COLORS.yellow, COLORS.red, '#7ee787', '#ff7b72']
+
+  const xTile = (x, y, w, h, label, shape, color) => (
+    <g>
+      <rect x={x} y={y} width={w} height={h} fill={color} fillOpacity="0.18" stroke={color} />
+      <text x={x + w / 2} y={y + h / 2 - 2} fontFamily={MONO} fontSize="11" fill={COLORS.text} textAnchor="middle" fontWeight="600">{label}</text>
+      <text x={x + w / 2} y={y + h / 2 + 12} fontFamily={MONO} fontSize="9" fill={COLORS.muted} textAnchor="middle">{shape}</text>
+    </g>
+  )
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={wrapperStyle(880)} role="img" aria-labelledby="mha-title mha-desc">
+      <title id="mha-title">Multi-Head Attention Layout</title>
+      <desc id="mha-desc">Input x is linearly projected once into Q, K, V each of shape (B,T,512), then reshaped into 8 parallel heads of dimension 64. Each head computes its own scaled dot-product attention. The 8 head outputs are concatenated and passed through W_o.</desc>
+
+      <text x={W / 2} y={20} fontFamily={FONT} fontSize="13" fill={COLORS.text} textAnchor="middle" fontWeight="600">Multi-Head Attention: split → attend in parallel → concat</text>
+      <text x={W / 2} y={38} fontFamily={FONT} fontSize="10" fill={COLORS.muted} textAnchor="middle">Single big projection, then reshape into heads — same params as 8 separate projections</text>
+
+      {/* Input x */}
+      {xTile(W / 2 - 70, 50, 140, 36, 'x', '(B, T, d=512)', COLORS.accent)}
+
+      {/* W_q, W_k, W_v */}
+      <line x1={W / 2 - 50} y1={86} x2={170} y2={120} stroke={COLORS.muted} strokeWidth="1.2" />
+      <line x1={W / 2}      y1={86} x2={W / 2}  y2={120} stroke={COLORS.muted} strokeWidth="1.2" />
+      <line x1={W / 2 + 50} y1={86} x2={710} y2={120} stroke={COLORS.muted} strokeWidth="1.2" />
+      {xTile(110, 120, 140, 38, 'Q = x·W_q', '(B, T, 512)', COLORS.purple)}
+      {xTile(W / 2 - 70, 120, 140, 38, 'K = x·W_k', '(B, T, 512)', COLORS.orange)}
+      {xTile(650, 120, 140, 38, 'V = x·W_v', '(B, T, 512)', COLORS.green)}
+
+      {/* Reshape annotation */}
+      <text x={W / 2} y={180} fontFamily={MONO} fontSize="10" fill={COLORS.muted} textAnchor="middle">reshape (B, T, 512) → (B, T, 8, 64) → 8 heads of (B, T, d_k=64)</text>
+
+      {/* 8 head lanes */}
+      {(() => {
+        const laneW = 90
+        const laneGap = 8
+        const totalW = 8 * laneW + 7 * laneGap
+        const startX = (W - totalW) / 2
+        const laneY = 200
+        const laneH = 180
+        return Array.from({ length: 8 }).map((_, h) => {
+          const x = startX + h * (laneW + laneGap)
+          const c = headColors[h]
+          return (
+            <g key={h}>
+              {/* head column container */}
+              <rect x={x} y={laneY} width={laneW} height={laneH} fill={c} fillOpacity="0.06" stroke={c} strokeOpacity="0.5" />
+              <text x={x + laneW / 2} y={laneY + 14} fontFamily={MONO} fontSize="10" fill={c} textAnchor="middle" fontWeight="600">head {h + 1}</text>
+              {/* mini Q,K,V */}
+              <rect x={x + 8} y={laneY + 22} width={(laneW - 24) / 3} height={16} fill={COLORS.purple} fillOpacity="0.4" />
+              <rect x={x + 12 + (laneW - 24) / 3} y={laneY + 22} width={(laneW - 24) / 3} height={16} fill={COLORS.orange} fillOpacity="0.4" />
+              <rect x={x + 16 + 2 * (laneW - 24) / 3} y={laneY + 22} width={(laneW - 24) / 3} height={16} fill={COLORS.green} fillOpacity="0.4" />
+              <text x={x + laneW / 2} y={laneY + 33} fontFamily={MONO} fontSize="8" fill={COLORS.text} textAnchor="middle">Q K V</text>
+              {/* attention box */}
+              <rect x={x + 8} y={laneY + 50} width={laneW - 16} height={36} fill={c} fillOpacity="0.25" stroke={c} />
+              <text x={x + laneW / 2} y={laneY + 65} fontFamily={MONO} fontSize="9" fill={COLORS.text} textAnchor="middle">softmax</text>
+              <text x={x + laneW / 2} y={laneY + 78} fontFamily={MONO} fontSize="9" fill={COLORS.text} textAnchor="middle">(QKᵀ/√d_k)·V</text>
+              {/* output tile */}
+              <rect x={x + 8} y={laneY + 100} width={laneW - 16} height={32} fill={c} fillOpacity="0.4" stroke={c} />
+              <text x={x + laneW / 2} y={laneY + 115} fontFamily={MONO} fontSize="9" fill={COLORS.text} textAnchor="middle">out_{h + 1}</text>
+              <text x={x + laneW / 2} y={laneY + 127} fontFamily={MONO} fontSize="8" fill={COLORS.muted} textAnchor="middle">(B,T,64)</text>
+              {/* arrow down to concat */}
+              <line x1={x + laneW / 2} y1={laneY + 132} x2={x + laneW / 2} y2={laneY + laneH - 2} stroke={c} strokeOpacity="0.6" strokeWidth="1" />
+            </g>
+          )
+        })
+      })()}
+
+      {/* Concat bar */}
+      <rect x={50} y={395} width={W - 100} height={26} fill={COLORS.muted} fillOpacity="0.15" stroke={COLORS.muted} />
+      <text x={W / 2} y={412} fontFamily={MONO} fontSize="11" fill={COLORS.text} textAnchor="middle" fontWeight="600">concat → (B, T, 8·64 = 512)</text>
+
+      {/* W_o */}
+      <line x1={W / 2} y1={421} x2={W / 2} y2={438} stroke={COLORS.muted} strokeWidth="1.2" />
+      <text x={W / 2 + 8} y={433} fontFamily={MONO} fontSize="10" fill={COLORS.muted}>W_o</text>
+      {xTile(W / 2 - 100, 438, 200, 32, 'output', '(B, T, 512)', COLORS.accent)}
+
+      <text x={W / 2} y={H - 2} fontFamily={FONT} fontSize="10" fill={COLORS.muted} textAnchor="middle" fontStyle="italic">Each head specializes (syntax / coreference / long-range / …)</text>
+    </svg>
+  )
+}
+
+// =========================================================================
+// KVCacheGrowth — PyTorch Module 5: KV cache during autoregressive gen
+// =========================================================================
+export const KVCacheGrowth = () => {
+  const W = 820, H = 380
+
+  const cellW = 22
+  const cellH = 22
+  const snapY = 130
+
+  const drawSnapshot = (xOff, label, cachedLen, isLast) => {
+    const cells = isLast ? cachedLen : cachedLen
+    return (
+      <g>
+        <text x={xOff + cells * cellW / 2} y={70} fontFamily={MONO} fontSize="11" fill={COLORS.text} textAnchor="middle" fontWeight="600">{label}</text>
+
+        {/* Q vector for current step */}
+        <rect x={xOff + (cells - 1) * cellW} y={85} width={cellW} height={cellH} fill={COLORS.accent} stroke={COLORS.accent} strokeWidth="1.5" />
+        <text x={xOff + (cells - 1) * cellW + cellW / 2} y={101} fontFamily={MONO} fontSize="9" fill={COLORS.bg} textAnchor="middle" fontWeight="700">Q_{cells}</text>
+
+        {/* arrow Q -> cache */}
+        <line x1={xOff + (cells - 1) * cellW + cellW / 2} y1={107} x2={xOff + cells * cellW / 2} y2={snapY - 4} stroke={COLORS.accent} strokeWidth="1" strokeDasharray="3 3" />
+
+        {/* K cache row */}
+        {Array.from({ length: cells }).map((_, i) => (
+          <rect key={`k-${i}`} x={xOff + i * cellW} y={snapY} width={cellW} height={cellH}
+            fill={COLORS.accent} fillOpacity={i === cells - 1 ? 0.8 : 0.35}
+            stroke={i === cells - 1 ? COLORS.yellow : COLORS.accent}
+            strokeWidth={i === cells - 1 ? 2 : 1} />
+        ))}
+        <text x={xOff - 8} y={snapY + cellH / 2 + 4} fontFamily={MONO} fontSize="10" fill={COLORS.muted} textAnchor="end">K</text>
+
+        {/* V cache row */}
+        {Array.from({ length: cells }).map((_, i) => (
+          <rect key={`v-${i}`} x={xOff + i * cellW} y={snapY + cellH + 4} width={cellW} height={cellH}
+            fill={COLORS.green} fillOpacity={i === cells - 1 ? 0.8 : 0.35}
+            stroke={i === cells - 1 ? COLORS.yellow : COLORS.green}
+            strokeWidth={i === cells - 1 ? 2 : 1} />
+        ))}
+        <text x={xOff - 8} y={snapY + cellH * 1.5 + 8} fontFamily={MONO} fontSize="10" fill={COLORS.muted} textAnchor="end">V</text>
+
+        {/* shape label */}
+        <text x={xOff + cells * cellW / 2} y={snapY + cellH * 2 + 22} fontFamily={MONO} fontSize="10" fill={COLORS.muted} textAnchor="middle">cached len = {cells}</text>
+      </g>
+    )
+  }
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={wrapperStyle(820)} role="img" aria-labelledby="kvc-title kvc-desc">
+      <title id="kvc-title">KV Cache Growth During Autoregressive Generation</title>
+      <desc id="kvc-desc">Snapshots at step 1, step 2, and step T showing K and V caches growing by one cell per generated token. Each step only computes Q for the new token, then attends over the full cached K and V.</desc>
+
+      <text x={W / 2} y={22} fontFamily={FONT} fontSize="13" fill={COLORS.text} textAnchor="middle" fontWeight="600">KV cache grows by one column per generated token</text>
+
+      {/* Memory bar */}
+      <rect x={40} y={40} width={W - 80} height={14} fill={COLORS.panel} stroke={COLORS.grid} />
+      <text x={W / 2} y={51} fontFamily={MONO} fontSize="10" fill={COLORS.muted} textAnchor="middle">Cache memory: B × T × n_layers × 2 × d_head bytes (linear in T)</text>
+
+      {drawSnapshot(70, 'step 1', 1)}
+      {drawSnapshot(220, 'step 2', 2)}
+      {drawSnapshot(420, 'step T', 12, true)}
+
+      {/* Bottom comparison */}
+      <g transform="translate(40, 290)">
+        <rect x="0" y="0" width={W - 80} height="22" fill={COLORS.red} fillOpacity="0.15" stroke={COLORS.red} />
+        <text x="10" y="15" fontFamily={MONO} fontSize="10" fill={COLORS.red}>Without cache: recompute K_{1..t}, V_{1..t} every step → O(T²) total work</text>
+
+        <rect x="0" y="28" width={W - 80} height="22" fill={COLORS.green} fillOpacity="0.15" stroke={COLORS.green} />
+        <text x="10" y="43" fontFamily={MONO} fontSize="10" fill={COLORS.green}>With cache: append K_t, V_t only → O(T) total work</text>
+      </g>
+
+      <text x={W / 2} y={H - 6} fontFamily={FONT} fontSize="10" fill={COLORS.muted} textAnchor="middle" fontStyle="italic">Each step: compute Q_t only, then attend over full cached K and V.</text>
+    </svg>
+  )
+}
+
+// =========================================================================
+// TransformerArchitecture — PyTorch Module 6: full nanoGPT pipeline
+// =========================================================================
+export const TransformerArchitecture = () => {
+  const W = 720, H = 660
+
+  const box = (x, y, w, h, label, sub, color) => (
+    <g>
+      <rect x={x} y={y} width={w} height={h} fill={color} fillOpacity="0.22" stroke={color} />
+      <text x={x + w / 2} y={y + h / 2 + (sub ? -4 : 4)} fontFamily={FONT} fontSize="12" fill={COLORS.text} textAnchor="middle" fontWeight="600">{label}</text>
+      {sub && <text x={x + w / 2} y={y + h / 2 + 12} fontFamily={MONO} fontSize="10" fill={COLORS.muted} textAnchor="middle">{sub}</text>}
+    </g>
+  )
+
+  const cx = W / 2
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={wrapperStyle(720)} role="img" aria-labelledby="ta-title ta-desc">
+      <title id="ta-title">Full Transformer (nanoGPT) Architecture</title>
+      <desc id="ta-desc">Token IDs are embedded and added to position embeddings, then passed through N stacked transformer blocks. A final LayerNorm and a linear projection to vocabulary size produces logits.</desc>
+
+      <text x={cx} y={22} fontFamily={FONT} fontSize="13" fill={COLORS.text} textAnchor="middle" fontWeight="600">nanoGPT Architecture (decoder-only Transformer)</text>
+
+      {/* Token IDs */}
+      <g>
+        <text x={cx} y={50} fontFamily={MONO} fontSize="11" fill={COLORS.muted} textAnchor="middle">[ t₁  t₂  t₃  …  t_T ]</text>
+        {Array.from({ length: 5 }).map((_, i) => (
+          <rect key={i} x={cx - 100 + i * 40} y={56} width={36} height={20} fill={COLORS.panel} stroke={COLORS.muted} />
+        ))}
+        {[1, 2, 3, '…', 'T'].map((t, i) => (
+          <text key={i} x={cx - 100 + i * 40 + 18} y={70} fontFamily={MONO} fontSize="10" fill={COLORS.text} textAnchor="middle">t_{t}</text>
+        ))}
+      </g>
+
+      {/* Token embedding */}
+      <line x1={cx} y1={76} x2={cx} y2={100} stroke={COLORS.muted} />
+      {box(cx - 140, 100, 280, 38, 'Token Embedding', '(V × d) lookup → (B, T, d)', COLORS.accent)}
+
+      {/* + Position embedding */}
+      <line x1={cx} y1={138} x2={cx} y2={160} stroke={COLORS.muted} />
+      <text x={cx - 110} y={166} fontFamily={MONO} fontSize="14" fill={COLORS.orange} textAnchor="middle" fontWeight="700">+</text>
+      {box(cx - 90, 150, 240, 32, 'Position Embedding', '(T_max × d)', COLORS.orange)}
+
+      {/* x_0 tile */}
+      <line x1={cx} y1={182} x2={cx} y2={205} stroke={COLORS.muted} />
+      {box(cx - 100, 205, 200, 32, 'x₀  (B, T, d)', null, COLORS.accent)}
+
+      {/* Stacked blocks (visual depth) */}
+      <line x1={cx} y1={237} x2={cx} y2={260} stroke={COLORS.muted} />
+      {[0, 1, 2, 3, 4].map(i => {
+        const dx = i * 6
+        const dy = i * 6
+        return (
+          <g key={i}>
+            <rect x={cx - 130 + dx} y={260 + dy} width={260} height={90} fill={COLORS.purple} fillOpacity="0.15" stroke={COLORS.purple} />
+          </g>
+        )
+      })}
+      {/* Front block content */}
+      <text x={cx} y={278} fontFamily={FONT} fontSize="12" fill={COLORS.text} textAnchor="middle" fontWeight="600">Transformer Block (× N)</text>
+      <text x={cx} y={296} fontFamily={MONO} fontSize="10" fill={COLORS.muted} textAnchor="middle">LN → Self-Attn → +</text>
+      <text x={cx} y={310} fontFamily={MONO} fontSize="10" fill={COLORS.muted} textAnchor="middle">LN → MLP → +</text>
+      <text x={cx} y={328} fontFamily={MONO} fontSize="10" fill={COLORS.muted} textAnchor="middle">shape preserved (B, T, d)</text>
+
+      {/* Final LN */}
+      <line x1={cx} y1={384} x2={cx} y2={410} stroke={COLORS.muted} />
+      {box(cx - 120, 410, 240, 36, 'Final LayerNorm', null, COLORS.accent)}
+
+      {/* Output linear */}
+      <line x1={cx} y1={446} x2={cx} y2={468} stroke={COLORS.muted} />
+      {box(cx - 140, 468, 280, 38, 'Output Linear', 'd → V (vocab)', COLORS.green)}
+
+      {/* logits */}
+      <line x1={cx} y1={506} x2={cx} y2={528} stroke={COLORS.muted} />
+      {box(cx - 110, 528, 220, 36, 'logits', '(B, T, V)', COLORS.green)}
+
+      {/* softmax annotation */}
+      <text x={cx} y={585} fontFamily={FONT} fontSize="10" fill={COLORS.muted} textAnchor="middle">apply softmax over V → next-token probabilities</text>
+
+      {/* Side annotations */}
+      <g transform="translate(20, 100)">
+        <rect x="0" y="0" width="120" height="60" fill={COLORS.panel} stroke={COLORS.grid} />
+        <text x="60" y="16" fontFamily={MONO} fontSize="9" fill={COLORS.muted} textAnchor="middle">B = batch</text>
+        <text x="60" y="28" fontFamily={MONO} fontSize="9" fill={COLORS.muted} textAnchor="middle">T = seq_len</text>
+        <text x="60" y="40" fontFamily={MONO} fontSize="9" fill={COLORS.muted} textAnchor="middle">d = embed_dim</text>
+        <text x="60" y="52" fontFamily={MONO} fontSize="9" fill={COLORS.muted} textAnchor="middle">V = vocab_size</text>
+      </g>
+
+      <text x={W - 30} y={302} fontFamily={FONT} fontSize="10" fill={COLORS.purple} textAnchor="end">× N blocks</text>
+      <text x={W - 30} y={316} fontFamily={FONT} fontSize="10" fill={COLORS.muted} textAnchor="end">(typically 6–96)</text>
+
+      <text x={cx} y={H - 16} fontFamily={FONT} fontSize="10" fill={COLORS.muted} textAnchor="middle" fontStyle="italic">Same shape (B, T, d) flows through every block — composition stays simple.</text>
+    </svg>
+  )
+}
+
+// =========================================================================
+// LRSchedulePlot — PyTorch Module 7: warmup + cosine LR schedule
+// =========================================================================
+export const LRSchedulePlot = () => {
+  const W = 720, H = 300
+  const padL = 70, padR = 30, padT = 40, padB = 50
+  const plotW = W - padL - padR
+  const plotH = H - padT - padB
+
+  const totalSteps = 10000
+  const warmupSteps = 1000
+  const peakLR = 1.0  // normalized
+
+  const xScale = s => padL + (s / totalSteps) * plotW
+  const yScale = lr => padT + plotH - (lr / peakLR) * plotH
+
+  const lrAt = s => {
+    if (s < warmupSteps) return (s / warmupSteps) * peakLR
+    const progress = (s - warmupSteps) / (totalSteps - warmupSteps)
+    return 0.5 * peakLR * (1 + Math.cos(Math.PI * progress))
+  }
+
+  const points = Array.from({ length: 200 }).map((_, i) => {
+    const s = (i / 199) * totalSteps
+    return `${xScale(s)},${yScale(lrAt(s))}`
+  }).join(' ')
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={wrapperStyle(720)} role="img" aria-labelledby="lr-title lr-desc">
+      <title id="lr-title">Warmup + Cosine Learning Rate Schedule</title>
+      <desc id="lr-desc">Learning rate ramps linearly from zero to a peak value over the warmup steps, then decays smoothly to zero following a cosine curve.</desc>
+
+      <text x={W / 2} y={22} fontFamily={FONT} fontSize="13" fill={COLORS.text} textAnchor="middle" fontWeight="600">Warmup + Cosine LR Schedule</text>
+
+      {/* warmup region */}
+      <rect x={xScale(0)} y={padT} width={xScale(warmupSteps) - xScale(0)} height={plotH} fill={COLORS.yellow} fillOpacity="0.10" />
+      {/* decay region */}
+      <rect x={xScale(warmupSteps)} y={padT} width={xScale(totalSteps) - xScale(warmupSteps)} height={plotH} fill={COLORS.accent} fillOpacity="0.08" />
+
+      {/* axes */}
+      <line x1={padL} y1={padT} x2={padL} y2={padT + plotH} stroke={COLORS.muted} />
+      <line x1={padL} y1={padT + plotH} x2={padL + plotW} y2={padT + plotH} stroke={COLORS.muted} />
+
+      {/* Y ticks */}
+      {[0, 0.25, 0.5, 0.75, 1.0].map(t => (
+        <g key={t}>
+          <line x1={padL - 4} y1={yScale(t)} x2={padL} y2={yScale(t)} stroke={COLORS.muted} />
+          <text x={padL - 8} y={yScale(t) + 4} fontFamily={MONO} fontSize="10" fill={COLORS.muted} textAnchor="end">{t === 1.0 ? 'peak' : t.toFixed(2)}</text>
+        </g>
+      ))}
+
+      {/* X ticks */}
+      {[0, 1000, 2500, 5000, 7500, 10000].map(s => (
+        <g key={s}>
+          <line x1={xScale(s)} y1={padT + plotH} x2={xScale(s)} y2={padT + plotH + 4} stroke={COLORS.muted} />
+          <text x={xScale(s)} y={padT + plotH + 16} fontFamily={MONO} fontSize="10" fill={COLORS.muted} textAnchor="middle">{s}</text>
+        </g>
+      ))}
+
+      {/* Curve */}
+      <polyline points={points} fill="none" stroke={COLORS.accent} strokeWidth="2.5" />
+
+      {/* Warmup boundary */}
+      <line x1={xScale(warmupSteps)} y1={padT} x2={xScale(warmupSteps)} y2={padT + plotH} stroke={COLORS.muted} strokeDasharray="4 4" />
+      <text x={xScale(warmupSteps)} y={padT - 4} fontFamily={MONO} fontSize="10" fill={COLORS.muted} textAnchor="middle">warmup_steps = 1000</text>
+
+      {/* Region annotations */}
+      <text x={xScale(warmupSteps / 2)} y={padT + 18} fontFamily={FONT} fontSize="10" fill={COLORS.yellow} textAnchor="middle">warmup</text>
+      <text x={xScale(warmupSteps / 2)} y={padT + 30} fontFamily={FONT} fontSize="9" fill={COLORS.muted} textAnchor="middle">prevents early divergence</text>
+      <text x={xScale(5500)} y={padT + 18} fontFamily={FONT} fontSize="10" fill={COLORS.accent} textAnchor="middle">cosine decay</text>
+      <text x={xScale(5500)} y={padT + 30} fontFamily={FONT} fontSize="9" fill={COLORS.muted} textAnchor="middle">smooth, no hard restarts</text>
+
+      <text x={padL + plotW / 2} y={H - 12} fontFamily={FONT} fontSize="11" fill={COLORS.text} textAnchor="middle">training step</text>
+      <text x={20} y={padT + plotH / 2} fontFamily={FONT} fontSize="11" fill={COLORS.text} textAnchor="middle" transform={`rotate(-90 20 ${padT + plotH / 2})`}>learning rate</text>
+    </svg>
+  )
+}
+
+// =========================================================================
+// SamplingStrategies — PyTorch Module 7: greedy / temp / top-k / top-p
+// =========================================================================
+export const SamplingStrategies = () => {
+  const W = 760, H = 500
+
+  const base = [0.30, 0.18, 0.12, 0.09, 0.07, 0.05, 0.04, 0.04, 0.03, 0.03, 0.03, 0.02]
+  const tokens = base.length
+
+  // Apply temperature: p_i ∝ p_i^(1/T) — flattens with T>1
+  const temperature = (probs, T) => {
+    const scaled = probs.map(p => Math.pow(p, 1 / T))
+    const sum = scaled.reduce((a, b) => a + b, 0)
+    return scaled.map(s => s / sum)
+  }
+  const greedy = base.map((_, i) => i === 0 ? 1 : 0)
+  const tempDist = temperature(base, 1.5)
+  const topK = (() => {
+    const k = 4
+    const kept = base.map((p, i) => i < k ? p : 0)
+    const sum = kept.reduce((a, b) => a + b, 0)
+    return kept.map(v => v / sum)
+  })()
+  const topP = (() => {
+    const p = 0.9
+    let cum = 0
+    const result = []
+    for (const v of base) {
+      if (cum < p) {
+        result.push(v)
+        cum += v
+      } else {
+        result.push(0)
+      }
+    }
+    const sum = result.reduce((a, b) => a + b, 0)
+    return result.map(v => v / sum)
+  })()
+
+  const panels = [
+    { title: 'Greedy (T=0)',     subtitle: 'deterministic, can collapse', dist: greedy,  cutoff: null },
+    { title: 'Temperature T=1.5', subtitle: 'more diverse / random',       dist: tempDist, cutoff: null },
+    { title: 'Top-k = 4',         subtitle: 'fixed truncation',            dist: topK,     cutoff: 4 },
+    { title: 'Top-p = 0.9',       subtitle: 'adaptive nucleus',            dist: topP,     cutoff: topP.findIndex(v => v === 0) },
+  ]
+
+  const panelW = (W - 60) / 2
+  const panelH = (H - 80) / 2
+
+  const drawPanel = (xOff, yOff, panel) => {
+    const padL = 30, padT = 28, padB = 40, padR = 12
+    const innerW = panelW - padL - padR
+    const innerH = panelH - padT - padB
+    const binW = innerW / tokens
+    const yMax = 1.0
+    return (
+      <g transform={`translate(${xOff}, ${yOff})`}>
+        <rect x="0" y="0" width={panelW} height={panelH} fill={COLORS.panel} stroke={COLORS.grid} />
+        <text x={panelW / 2} y={16} fontFamily={FONT} fontSize="12" fill={COLORS.text} textAnchor="middle" fontWeight="600">{panel.title}</text>
+
+        {/* axes */}
+        <line x1={padL} y1={padT} x2={padL} y2={padT + innerH} stroke={COLORS.muted} />
+        <line x1={padL} y1={padT + innerH} x2={padL + innerW} y2={padT + innerH} stroke={COLORS.muted} />
+
+        {/* bars */}
+        {panel.dist.map((v, i) => {
+          const h = (v / yMax) * innerH
+          const isKept = v > 0
+          const cutoff = panel.cutoff
+          const isMuted = cutoff !== null && cutoff > 0 && i >= cutoff
+          return (
+            <rect key={i}
+              x={padL + i * binW + 1}
+              y={padT + innerH - h}
+              width={binW - 2}
+              height={Math.max(0, h)}
+              fill={isMuted || !isKept ? COLORS.muted : COLORS.accent}
+              fillOpacity={isMuted || !isKept ? 0.3 : 0.85} />
+          )
+        })}
+
+        {/* token id ticks */}
+        {[0, 5, 11].map(i => (
+          <text key={i} x={padL + i * binW + binW / 2} y={padT + innerH + 12} fontFamily={MONO} fontSize="9" fill={COLORS.muted} textAnchor="middle">{i + 1}</text>
+        ))}
+        <text x={panelW / 2} y={padT + innerH + 26} fontFamily={FONT} fontSize="9" fill={COLORS.muted} textAnchor="middle">vocab token rank</text>
+        <text x={panelW / 2} y={panelH - 4} fontFamily={FONT} fontSize="10" fill={COLORS.muted} textAnchor="middle" fontStyle="italic">{panel.subtitle}</text>
+      </g>
+    )
+  }
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={wrapperStyle(760)} role="img" aria-labelledby="ss-title ss-desc">
+      <title id="ss-title">Sampling Strategies: Greedy, Temperature, Top-k, Top-p</title>
+      <desc id="ss-desc">Four panels show how different sampling strategies reshape the same base probability distribution. Greedy collapses to a single token; temperature flattens; top-k keeps the highest k; top-p (nucleus) keeps the smallest set covering probability mass p.</desc>
+
+      <text x={W / 2} y={20} fontFamily={FONT} fontSize="13" fill={COLORS.text} textAnchor="middle" fontWeight="600">Same logits, four sampling strategies</text>
+
+      {drawPanel(20, 40, panels[0])}
+      {drawPanel(40 + panelW, 40, panels[1])}
+      {drawPanel(20, 60 + panelH, panels[2])}
+      {drawPanel(40 + panelW, 60 + panelH, panels[3])}
+    </svg>
+  )
+}
+
+// =========================================================================
+// RoPERotation — PyTorch Module 8: rotary position encoding
+// =========================================================================
+export const RoPERotation = () => {
+  const W = 800, H = 400
+
+  // Left: unit circle with three rotated arrows
+  const cx = 160, cy = 200, r = 110
+  const theta = Math.PI / 5  // ~36°
+  const arrows = [
+    { angle: 0,         label: 'pos 0', color: COLORS.accent },
+    { angle: theta,     label: 'pos 1', color: COLORS.green },
+    { angle: 2 * theta, label: 'pos 2', color: COLORS.orange },
+  ]
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={wrapperStyle(800)} role="img" aria-labelledby="rope-title rope-desc">
+      <title id="rope-title">RoPE — 2D Rotation per Dimension Pair</title>
+      <desc id="rope-desc">Each dimension pair (x_2i, x_2i+1) is rotated by an angle proportional to position. Higher-index pairs rotate at lower frequencies. The dot product after rotation depends only on the relative position m minus n.</desc>
+
+      <text x={W / 2} y={22} fontFamily={FONT} fontSize="13" fill={COLORS.text} textAnchor="middle" fontWeight="600">RoPE: rotate each dimension pair by pos · θᵢ</text>
+
+      {/* axes */}
+      <line x1={cx - r - 20} y1={cy} x2={cx + r + 20} y2={cy} stroke={COLORS.muted} strokeDasharray="2 3" />
+      <line x1={cx} y1={cy - r - 20} x2={cx} y2={cy + r + 20} stroke={COLORS.muted} strokeDasharray="2 3" />
+      <text x={cx + r + 28} y={cy + 4} fontFamily={MONO} fontSize="10" fill={COLORS.muted}>x_{'{2i}'}</text>
+      <text x={cx + 6} y={cy - r - 24} fontFamily={MONO} fontSize="10" fill={COLORS.muted}>x_{'{2i+1}'}</text>
+
+      {/* circle */}
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke={COLORS.grid} />
+
+      {/* rotated arrows */}
+      {arrows.map((a, i) => {
+        const ex = cx + Math.cos(-a.angle) * r
+        const ey = cy + Math.sin(-a.angle) * r
+        return (
+          <g key={i}>
+            <line x1={cx} y1={cy} x2={ex} y2={ey} stroke={a.color} strokeWidth="2.5" markerEnd={`url(#ropeArr${i})`} />
+            <text x={ex + (a.angle === 0 ? 8 : 0)} y={ey - 6} fontFamily={MONO} fontSize="10" fill={a.color} textAnchor={a.angle === 0 ? 'start' : 'middle'}>{a.label}</text>
+            <defs>
+              <marker id={`ropeArr${i}`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                <path d="M0,0 L10,5 L0,10 z" fill={a.color} />
+              </marker>
+            </defs>
+          </g>
+        )
+      })}
+      {/* angle arc */}
+      <path d={`M ${cx + 30} ${cy} A 30 30 0 0 0 ${cx + 30 * Math.cos(-theta)} ${cy + 30 * Math.sin(-theta)}`} fill="none" stroke={COLORS.green} strokeWidth="1" />
+      <text x={cx + 38} y={cy - 16} fontFamily={MONO} fontSize="10" fill={COLORS.green}>θᵢ</text>
+
+      <text x={cx} y={cy + r + 50} fontFamily={FONT} fontSize="10" fill={COLORS.muted} textAnchor="middle">2D rotation in dimension pair (2i, 2i+1)</text>
+
+      {/* Center: dimension pairs */}
+      <g transform="translate(370, 60)">
+        <text x="50" y="0" fontFamily={FONT} fontSize="11" fill={COLORS.text} textAnchor="middle" fontWeight="600">head dim d = 8</text>
+        {[
+          { i: 0, color: COLORS.purple, freq: 'θ₀ = 1.0' },
+          { i: 1, color: COLORS.accent, freq: 'θ₁ ≈ 0.10' },
+          { i: 2, color: COLORS.green,  freq: 'θ₂ ≈ 0.01' },
+          { i: 3, color: COLORS.orange, freq: 'θ₃ ≈ 0.001' },
+        ].map((p, i) => (
+          <g key={i}>
+            <rect x="0" y={20 + i * 30} width="40" height="22" fill={p.color} fillOpacity="0.4" stroke={p.color} />
+            <rect x="40" y={20 + i * 30} width="40" height="22" fill={p.color} fillOpacity="0.4" stroke={p.color} />
+            <text x="20" y={35 + i * 30} fontFamily={MONO} fontSize="10" fill={COLORS.text} textAnchor="middle">{p.i * 2}</text>
+            <text x="60" y={35 + i * 30} fontFamily={MONO} fontSize="10" fill={COLORS.text} textAnchor="middle">{p.i * 2 + 1}</text>
+            <text x="92" y={35 + i * 30} fontFamily={MONO} fontSize="10" fill={p.color}>{p.freq}</text>
+          </g>
+        ))}
+        <text x="100" y="170" fontFamily={FONT} fontSize="9" fill={COLORS.muted} textAnchor="middle">θᵢ = 10000⁻²ⁱ/d</text>
+        <text x="100" y="184" fontFamily={FONT} fontSize="9" fill={COLORS.muted} textAnchor="middle">(high freq → low freq)</text>
+      </g>
+
+      {/* Right: frequency curve */}
+      <g transform="translate(580, 80)">
+        <text x="100" y="0" fontFamily={FONT} fontSize="11" fill={COLORS.text} textAnchor="middle" fontWeight="600">θᵢ across dimension pairs</text>
+        <line x1="20" y1="20" x2="20" y2="160" stroke={COLORS.muted} />
+        <line x1="20" y1="160" x2="200" y2="160" stroke={COLORS.muted} />
+        {(() => {
+          const pts = []
+          for (let i = 0; i < 32; i++) {
+            const t = Math.pow(10000, -2 * i / 64)
+            const x = 20 + (i / 31) * 180
+            const y = 160 - Math.max(0, (Math.log10(t) + 4) / 4) * 130
+            pts.push(`${x},${y}`)
+          }
+          return <polyline points={pts.join(' ')} fill="none" stroke={COLORS.purple} strokeWidth="2" />
+        })()}
+        <text x="20" y="178" fontFamily={MONO} fontSize="9" fill={COLORS.muted}>i = 0</text>
+        <text x="200" y="178" fontFamily={MONO} fontSize="9" fill={COLORS.muted} textAnchor="end">i = d/2</text>
+        <text x="0" y="20" fontFamily={MONO} fontSize="9" fill={COLORS.muted}>10⁰</text>
+        <text x="0" y="160" fontFamily={MONO} fontSize="9" fill={COLORS.muted}>10⁻⁴</text>
+      </g>
+
+      {/* Bottom annotation */}
+      <text x={W / 2} y={H - 14} fontFamily={MONO} fontSize="10" fill={COLORS.accent} textAnchor="middle">⟨R_m·q, R_n·k⟩ = ⟨q, R_(m−n)·k⟩  → encodes only relative position</text>
+    </svg>
+  )
+}
+
+// =========================================================================
+// GQAHeadGroups — PyTorch Module 8: MHA / GQA / MQA head sharing
+// =========================================================================
+export const GQAHeadGroups = () => {
+  const W = 820, H = 360
+
+  const drawLane = (xOff, title, kvCount, groupColors, label) => {
+    const laneW = 240
+    const qY = 60
+    const kY = 130
+    const vY = 180
+    const qStart = xOff + 18
+    const qSpacing = (laneW - 36) / 7
+
+    const qToKv = i => {
+      // mapping Q index -> KV index based on kvCount
+      if (kvCount === 8) return i
+      if (kvCount === 2) return Math.floor(i / 4)
+      return 0  // MQA
+    }
+
+    // KV positions
+    const kvPositions = []
+    for (let k = 0; k < kvCount; k++) {
+      const groupQs = [0, 1, 2, 3, 4, 5, 6, 7].filter(i => qToKv(i) === k)
+      const avg = groupQs.reduce((a, b) => a + b, 0) / groupQs.length
+      kvPositions.push(qStart + avg * qSpacing)
+    }
+
+    return (
+      <g>
+        <text x={xOff + laneW / 2} y={36} fontFamily={FONT} fontSize="12" fill={COLORS.text} textAnchor="middle" fontWeight="600">{title}</text>
+        <text x={xOff + laneW / 2} y={50} fontFamily={MONO} fontSize="10" fill={COLORS.muted} textAnchor="middle">{label}</text>
+
+        {/* Q heads */}
+        {Array.from({ length: 8 }).map((_, i) => {
+          const c = groupColors[qToKv(i) % groupColors.length]
+          const cx = qStart + i * qSpacing
+          return (
+            <g key={i}>
+              <circle cx={cx} cy={qY} r="11" fill={c} fillOpacity="0.4" stroke={c} strokeWidth="1.5" />
+              <text x={cx} y={qY + 4} fontFamily={MONO} fontSize="9" fill={COLORS.text} textAnchor="middle">Q{i + 1}</text>
+            </g>
+          )
+        })}
+        <text x={xOff} y={qY + 4} fontFamily={MONO} fontSize="10" fill={COLORS.muted}>Q</text>
+
+        {/* connections from Q to K */}
+        {Array.from({ length: 8 }).map((_, i) => {
+          const c = groupColors[qToKv(i) % groupColors.length]
+          const cx = qStart + i * qSpacing
+          const kx = kvPositions[qToKv(i)]
+          return <line key={i} x1={cx} y1={qY + 11} x2={kx} y2={kY - 10} stroke={c} strokeOpacity="0.5" strokeWidth="1" />
+        })}
+
+        {/* K boxes */}
+        {kvPositions.map((kx, k) => {
+          const c = groupColors[k % groupColors.length]
+          return (
+            <g key={k}>
+              <rect x={kx - 16} y={kY - 10} width="32" height="20" fill={c} fillOpacity="0.4" stroke={c} strokeWidth="1.5" />
+              <text x={kx} y={kY + 4} fontFamily={MONO} fontSize="9" fill={COLORS.text} textAnchor="middle">K{kvCount === 1 ? '' : k + 1}</text>
+            </g>
+          )
+        })}
+        <text x={xOff} y={kY + 4} fontFamily={MONO} fontSize="10" fill={COLORS.muted}>K</text>
+
+        {/* V boxes */}
+        {kvPositions.map((kx, k) => {
+          const c = groupColors[k % groupColors.length]
+          return (
+            <g key={k}>
+              <rect x={kx - 16} y={vY - 10} width="32" height="20" fill={c} fillOpacity="0.4" stroke={c} strokeWidth="1.5" />
+              <text x={kx} y={vY + 4} fontFamily={MONO} fontSize="9" fill={COLORS.text} textAnchor="middle">V{kvCount === 1 ? '' : k + 1}</text>
+            </g>
+          )
+        })}
+        <text x={xOff} y={vY + 4} fontFamily={MONO} fontSize="10" fill={COLORS.muted}>V</text>
+
+        {/* cache size bar */}
+        <text x={xOff + laneW / 2} y={vY + 40} fontFamily={MONO} fontSize="10" fill={COLORS.muted} textAnchor="middle">KV cache</text>
+        <rect x={xOff + 8} y={vY + 50} width={(laneW - 16) * (kvCount / 8)} height={10} fill={COLORS.accent} fillOpacity="0.6" stroke={COLORS.accent} />
+        <rect x={xOff + 8} y={vY + 50} width={laneW - 16} height={10} fill="none" stroke={COLORS.grid} />
+        <text x={xOff + laneW / 2} y={vY + 76} fontFamily={MONO} fontSize="9" fill={COLORS.accent} textAnchor="middle">{kvCount}/8 of full size</text>
+      </g>
+    )
+  }
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={wrapperStyle(820)} role="img" aria-labelledby="gqa-title gqa-desc">
+      <title id="gqa-title">MHA / GQA / MQA Head-Sharing Layout</title>
+      <desc id="gqa-desc">Three lanes compare multi-head attention variants. MHA uses 8 query heads with 8 KV heads. GQA shares KV across groups (here 8 Q heads with 2 KV groups of 4). MQA collapses to a single shared K and V.</desc>
+
+      <text x={W / 2} y={18} fontFamily={FONT} fontSize="13" fill={COLORS.text} textAnchor="middle" fontWeight="600">Attention head sharing: MHA → GQA → MQA</text>
+
+      {drawLane(20,  'MHA', 8, [COLORS.purple, COLORS.accent, COLORS.green, COLORS.orange, COLORS.yellow, COLORS.red, '#7ee787', '#ff7b72'], '8 Q · 8 KV')}
+      {drawLane(290, 'GQA', 2, [COLORS.purple, COLORS.orange], '8 Q · 2 KV (groups of 4)')}
+      {drawLane(560, 'MQA', 1, [COLORS.accent], '8 Q · 1 KV')}
+
+      <text x={W / 2} y={H - 6} fontFamily={FONT} fontSize="10" fill={COLORS.muted} textAnchor="middle" fontStyle="italic">Cache size shrinks 8× → 2× → 1×; quality stays close, speed/memory wins are large.</text>
+    </svg>
+  )
+}
+
+// =========================================================================
+// MoEParamBudget — PyTorch Module 9: active vs total params
+// =========================================================================
+export const MoEParamBudget = () => {
+  const W = 740, H = 320
+  const numExperts = 128
+  const activeIdx = [37, 92]
+
+  const expertsX = 30
+  const expertsY = 60
+  const expertsW = W - 280
+  const expertW = expertsW / numExperts
+  const expertH = 36
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={wrapperStyle(740)} role="img" aria-labelledby="moe-title moe-desc">
+      <title id="moe-title">MoE — Active vs Total Parameters</title>
+      <desc id="moe-desc">Of 128 expert FFNs (each 1B params, 128B total), only the top-2 chosen by the router actually run for each token. Compute is ~1.6% of total params, while memory must hold all experts.</desc>
+
+      <text x={W / 2} y={22} fontFamily={FONT} fontSize="13" fill={COLORS.text} textAnchor="middle" fontWeight="600">MoE: 128 experts · top-2 active per token</text>
+
+      {/* Total experts row */}
+      <text x={expertsX} y={50} fontFamily={MONO} fontSize="10" fill={COLORS.muted}>Total params: 128 × 1B = 128B (all stored in memory)</text>
+      {Array.from({ length: numExperts }).map((_, i) => {
+        const isActive = activeIdx.includes(i)
+        const baseColor = i % 2 === 0 ? COLORS.purple : COLORS.muted
+        return (
+          <rect key={i}
+            x={expertsX + i * expertW}
+            y={expertsY}
+            width={expertW - 0.5}
+            height={expertH}
+            fill={isActive ? COLORS.accent : baseColor}
+            fillOpacity={isActive ? 0.9 : 0.3}
+            stroke={isActive ? COLORS.yellow : 'none'}
+            strokeWidth={isActive ? 2 : 0} />
+        )
+      })}
+
+      {/* Highlight callout for active experts */}
+      <line x1={expertsX + activeIdx[0] * expertW + expertW / 2} y1={expertsY + expertH + 4} x2={W / 2 - 100} y2={150} stroke={COLORS.accent} strokeWidth="1" />
+      <line x1={expertsX + activeIdx[1] * expertW + expertW / 2} y1={expertsY + expertH + 4} x2={W / 2 - 100} y2={150} stroke={COLORS.accent} strokeWidth="1" />
+      <g transform={`translate(${W / 2 - 250}, 150)`}>
+        <rect x="0" y="0" width="300" height="40" fill={COLORS.accent} fillOpacity="0.18" stroke={COLORS.accent} />
+        <text x="150" y="16" fontFamily={MONO} fontSize="11" fill={COLORS.accent} textAnchor="middle" fontWeight="600">Active per token (top-2): 2B params</text>
+        <text x="150" y="30" fontFamily={MONO} fontSize="10" fill={COLORS.muted} textAnchor="middle">~1.6% of total compute</text>
+      </g>
+
+      {/* Equivalent dense bar */}
+      <text x={expertsX} y={220} fontFamily={MONO} fontSize="10" fill={COLORS.muted}>Dense FFN with equivalent compute:</text>
+      <rect x={expertsX} y={228} width={expertW * 2} height={expertH} fill={COLORS.green} fillOpacity="0.7" stroke={COLORS.green} />
+      <text x={expertsX + expertW * 2 + 8} y={250} fontFamily={MONO} fontSize="10" fill={COLORS.green}>~2B params</text>
+      <text x={expertsX} y={282} fontFamily={FONT} fontSize="11" fill={COLORS.text} fontStyle="italic">MoE buys 128B of stored knowledge with 2B of per-token compute.</text>
+
+      {/* Right side annotation list */}
+      <g transform={`translate(${W - 230}, 60)`}>
+        <rect x="0" y="0" width="220" height="120" fill={COLORS.panel} stroke={COLORS.grid} />
+        <text x="10" y="18" fontFamily={FONT} fontSize="10" fill={COLORS.text} fontWeight="600">Costs</text>
+        <text x="10" y="36" fontFamily={MONO} fontSize="9" fill={COLORS.muted}>Memory: O(N · expert)</text>
+        <text x="10" y="48" fontFamily={MONO} fontSize="9" fill={COLORS.muted}>  → all experts stored</text>
+        <text x="10" y="68" fontFamily={MONO} fontSize="9" fill={COLORS.green}>Compute: O(k · expert)</text>
+        <text x="10" y="80" fontFamily={MONO} fontSize="9" fill={COLORS.muted}>  → only top-k run</text>
+        <text x="10" y="100" fontFamily={MONO} fontSize="9" fill={COLORS.orange}>Comm: token → expert</text>
+        <text x="10" y="112" fontFamily={MONO} fontSize="9" fill={COLORS.muted}>  → often across GPUs</text>
+      </g>
+    </svg>
+  )
+}
+
+// =========================================================================
+// MLACompression — PyTorch Module 9: KV compression / decompression
+// =========================================================================
+export const MLACompression = () => {
+  const W = 880, H = 420
+
+  const tile = (x, y, w, h, label, shape, color) => (
+    <g>
+      <rect x={x} y={y} width={w} height={h} fill={color} fillOpacity="0.22" stroke={color} />
+      <text x={x + w / 2} y={y + h / 2 - 2} fontFamily={MONO} fontSize="11" fill={COLORS.text} textAnchor="middle" fontWeight="600">{label}</text>
+      <text x={x + w / 2} y={y + h / 2 + 12} fontFamily={MONO} fontSize="9" fill={COLORS.muted} textAnchor="middle">{shape}</text>
+    </g>
+  )
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={wrapperStyle(880)} role="img" aria-labelledby="mla-title mla-desc">
+      <title id="mla-title">MLA — KV Compression and Decompression</title>
+      <desc id="mla-desc">Multi-head Latent Attention compresses K and V through a low-rank latent of dimension d_latent (much smaller than n_h·d_k). Only the latent is cached; full K and V are reconstructed at attention time via up-projections.</desc>
+
+      <text x={W / 2} y={20} fontFamily={FONT} fontSize="13" fill={COLORS.text} textAnchor="middle" fontWeight="600">MLA: cache the latent, reconstruct K and V at attention time</text>
+
+      {/* Input x */}
+      {tile(20, 180, 90, 50, 'x', '(B, T, d)', COLORS.accent)}
+
+      {/* Q track (top) */}
+      {tile(180, 80, 90, 44, 'W_q', 'projection', COLORS.muted)}
+      <line x1={110} y1={195} x2={180} y2={102} stroke={COLORS.muted} strokeWidth="1.5" />
+      {tile(310, 80, 160, 44, 'Q', '(B, T, n_h·d_k = 4096)', COLORS.purple)}
+      <line x1={270} y1={102} x2={310} y2={102} stroke={COLORS.muted} strokeWidth="1.5" markerEnd="url(#mlaArrM)" />
+
+      {/* KV compression track (bottom) */}
+      {tile(180, 250, 110, 44, 'W_kv_down', 'compress', COLORS.red)}
+      <line x1={110} y1={215} x2={180} y2={272} stroke={COLORS.muted} strokeWidth="1.5" />
+
+      {/* Latent narrow tile */}
+      <g>
+        <rect x={310} y={258} width={70} height={28} fill={COLORS.red} fillOpacity="0.3" stroke={COLORS.red} strokeWidth="2" />
+        <text x={345} y={274} fontFamily={MONO} fontSize="10" fill={COLORS.text} textAnchor="middle" fontWeight="700">latent</text>
+        <text x={345} y={300} fontFamily={MONO} fontSize="9" fill={COLORS.muted} textAnchor="middle">(B, T, d_latent=128)</text>
+        <text x={345} y={246} fontFamily={FONT} fontSize="10" fill={COLORS.yellow} textAnchor="middle" fontWeight="600">cached here</text>
+      </g>
+      <line x1={290} y1={272} x2={310} y2={272} stroke={COLORS.muted} strokeWidth="1.5" markerEnd="url(#mlaArrM)" />
+
+      {/* Up projections W_k_up, W_v_up */}
+      {tile(420, 220, 90, 36, 'W_k_up', null, COLORS.muted)}
+      {tile(420, 280, 90, 36, 'W_v_up', null, COLORS.muted)}
+      <line x1={380} y1={272} x2={420} y2={238} stroke={COLORS.muted} strokeWidth="1.5" />
+      <line x1={380} y1={272} x2={420} y2={298} stroke={COLORS.muted} strokeWidth="1.5" />
+
+      {/* Reconstructed K, V */}
+      {tile(540, 210, 160, 40, 'K', '(B, T, n_h·d_k = 4096)', COLORS.green)}
+      {tile(540, 280, 160, 40, 'V', '(B, T, n_h·d_k = 4096)', COLORS.green)}
+      <line x1={510} y1={238} x2={540} y2={230} stroke={COLORS.muted} strokeWidth="1.5" markerEnd="url(#mlaArrM)" />
+      <line x1={510} y1={298} x2={540} y2={300} stroke={COLORS.muted} strokeWidth="1.5" markerEnd="url(#mlaArrM)" />
+
+      {/* Attention block */}
+      {tile(740, 170, 120, 80, 'attention', 'softmax(QKᵀ/√d)·V', COLORS.accent)}
+      <line x1={470} y1={102} x2={740} y2={195} stroke={COLORS.purple} strokeWidth="1.5" markerEnd="url(#mlaArrP)" />
+      <line x1={700} y1={230} x2={740} y2={210} stroke={COLORS.green} strokeWidth="1.5" markerEnd="url(#mlaArrG)" />
+      <line x1={700} y1={300} x2={740} y2={235} stroke={COLORS.green} strokeWidth="1.5" markerEnd="url(#mlaArrG)" />
+
+      {/* Cache size annotation */}
+      <g transform="translate(20, 350)">
+        <rect x="0" y="0" width={W - 40} height="44" fill={COLORS.panel} stroke={COLORS.grid} />
+        <text x={(W - 40) / 2} y="18" fontFamily={MONO} fontSize="10" fill={COLORS.text} textAnchor="middle">Standard MHA cache:  B·T·n_h·d_k·2 ≈ 4096·2 floats per token</text>
+        <text x={(W - 40) / 2} y="34" fontFamily={MONO} fontSize="10" fill={COLORS.green} textAnchor="middle">MLA cache:  B·T·d_latent ≈ 128 floats per token  →  ~32× smaller</text>
+      </g>
+
+      {/* RoPE inset */}
+      <text x={345} y={325} fontFamily={FONT} fontSize="9" fill={COLORS.muted} textAnchor="middle" fontStyle="italic">RoPE applied before compression</text>
+      <text x={345} y={336} fontFamily={FONT} fontSize="9" fill={COLORS.muted} textAnchor="middle" fontStyle="italic">to preserve relative-position math</text>
+
+      <defs>
+        <marker id="mlaArrM" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill={COLORS.muted} /></marker>
+        <marker id="mlaArrP" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill={COLORS.purple} /></marker>
+        <marker id="mlaArrG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill={COLORS.green} /></marker>
+      </defs>
+    </svg>
+  )
+}
+
 // Backwards-compat: legacy stub
 export const Placeholder = () => (
   <svg width="200" height="40" viewBox="0 0 200 40">
