@@ -7,6 +7,7 @@ import Quiz from './Quiz'
 import Exercise from './Exercise'
 import ColabExercise from './ColabExercise'
 import CodeBlock from './CodeBlock'
+import * as CudaDiagrams from './CudaDiagrams'
 import { findModuleCourse } from '../content/courses'
 
 mermaid.initialize({
@@ -129,6 +130,13 @@ function renderMarkdown(text) {
     if (tok.type === 'fence') {
       if (tok.lang === 'mermaid') {
         return <MermaidDiagram key={i} chart={tok.body.trim()} />;
+      }
+      // ```cudadiagram\nName\n``` -> render the named React SVG component from CudaDiagrams
+      if (tok.lang === 'cudadiagram') {
+        const name = tok.body.trim().split('\n')[0].trim();
+        const Cmp = CudaDiagrams[name];
+        if (Cmp) return <div key={i} style={{ margin: '16px 0', display: 'flex', justifyContent: 'center', overflow: 'auto' }}><Cmp /></div>;
+        return <div key={i} style={{ margin: '12px 0', padding: '12px', background: 'var(--bg-tertiary)', borderRadius: '6px', color: '#f85149', fontSize: '13px' }}>Unknown diagram: <code>{name}</code></div>;
       }
       // Map common aliases to Prism language names
       const langMap = { cuda: 'cpp', cu: 'cpp', shell: 'bash', sh: 'bash', '': 'text', text: 'text' };
