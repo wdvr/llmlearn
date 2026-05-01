@@ -1,0 +1,16 @@
+{
+  "id": "mps-mlx-framework",
+  "title": "MLX: Apple's Native ML Framework",
+  "description": "MLX is Apple's NumPy-flavoured array framework built natively on unified memory with lazy evaluation. Learn when MLX beats PyTorch+MPS, how mx.eval() works, and the mlx-lm ecosystem for running Llama and Mistral on a Mac.",
+  "course": "mps",
+  "sections": [
+    {
+      "title": "Why MLX?",
+      "content": "Coming soon — what MLX is, why Apple built it, and when it beats PyTorch's MPS backend.\n\n<!-- TODO:\n  - Lazy evaluation: arrays are computation graphs, only materialized at mx.eval() (or implicitly when their values are needed).\n  - Native unified memory: no .to(device) anywhere; arrays just live in RAM, GPU and CPU read the same buffer.\n  - NumPy-like API; minimal cognitive switch for ML researchers.\n  - When to pick MLX vs. PyTorch+MPS: today MLX often wins on inference for LLMs (mlx-lm); PyTorch wins on training-loop ergonomics and ecosystem (HuggingFace, datasets, accelerate).\n-->\n\n```\n[Coming soon]\n```"
+    },
+    {
+      "title": "Lazy Evaluation & mx.eval()",
+      "content": "Coming soon — how MLX's lazy graph compilation works in practice and the gotchas it introduces.\n\n<!-- TODO:\n  - Code walk: x = mx.random.normal((1000,1000)); y = x @ x; nothing has happened yet.\n  - mx.eval(y) forces materialization; printing or .item() also force it.\n  - Implications for benchmarking: timer must wrap the eval(), not the graph construction.\n  - Compare to torch.compile graph capture and to JAX's lazy/jit semantics.\n  - mlx-lm: 4-bit / 8-bit quantization, weight conversion from PyTorch checkpoints.\n  - Worked example: port a small transformer block from PyTorch+MPS to MLX, benchmark both.\n-->\n\n```\n[Coming soon]\n```"
+    }
+  ]
+}

@@ -369,8 +369,8 @@ function CoursePage({ courses, completed }) {
           <Link to="/prs" className="module-card">
             <div className="module-num" style={{ color: '#bc8cff' }}>PR</div>
             <div className="module-card-text">
-              <h4>PyTorch MPS PR Review</h4>
-              <p>Browse and study real PyTorch PRs related to MPS backend</p>
+              <h4>{course.title} PR Review</h4>
+              <p>Browse and study real PyTorch PRs related to the {course.title} backend</p>
             </div>
           </Link>
         )}

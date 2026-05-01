@@ -1,17 +1,31 @@
-import { modules as pytorchModules, curatedPRs, loadModule as loadPytorchModule } from './modules'
+import { modules as pytorchModules, loadModule as loadPytorchModule } from './modules'
+import { modules as mpsModules, curatedPRs as mpsCuratedPRs, loadModule as loadMpsModule } from './mps-modules'
 import { modules as cudaModules, loadModule as loadCudaModule } from './cuda-modules'
 
 export const courses = [
   {
     id: 'pytorch-llm',
     title: 'PyTorch & LLMs',
-    subtitle: 'Learning on Apple Silicon',
-    description: 'Hands-on course covering tensors, backprop, transformers, MPS acceleration, and building your own language model — all on Apple Silicon.',
+    subtitle: 'Tensors, Transformers, and Training',
+    description: 'Hands-on course covering autograd, attention, transformers, training loops, modern architectures, and MoE/MLA — device-agnostic.',
     icon: '🔥',
     color: '#58a6ff',
     modules: pytorchModules,
-    curatedPRs,
+    curatedPRs: [],
     exerciseRuntime: 'pyodide',
+  },
+  {
+    id: 'apple-mps',
+    title: 'Apple Silicon GPU (MPS)',
+    subtitle: 'Metal Performance Shaders & MLX',
+    description: 'GPU programming on Apple Silicon — Metal Performance Shaders, custom Metal Shading Language kernels, MLX, the Apple Neural Engine, and CoreML.',
+    icon: '🍎',
+    color: '#bc8cff',
+    modules: mpsModules,
+    curatedPRs: mpsCuratedPRs,
+    // Colab T4 demonstrates the same patterns (autocast, AMP, etc.); a future
+    // LocalExercise component can let users run snippets natively on MPS.
+    exerciseRuntime: 'colab',
   },
   {
     id: 'cuda-parallel',
@@ -35,8 +49,13 @@ export const findModuleCourse = (moduleId) => courses.find(c => c.modules.some(m
 // Dynamically import the full content for a module (sections.content, quiz, exercise).
 // Returns null if the id is unknown.
 export async function loadModule(id) {
-  return (await loadPytorchModule(id)) || (await loadCudaModule(id))
+  return (
+    (await loadPytorchModule(id)) ||
+    (await loadMpsModule(id)) ||
+    (await loadCudaModule(id))
+  )
 }
 
-// Re-export for anything still importing curatedPRs
-export { curatedPRs }
+// Re-export the curated PRs (now sourced from the MPS course) for any callers
+// still importing curatedPRs from this module.
+export const curatedPRs = mpsCuratedPRs

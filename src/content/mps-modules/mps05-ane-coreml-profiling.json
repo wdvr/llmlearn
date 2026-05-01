@@ -1,0 +1,16 @@
+{
+  "id": "mps-ane-coreml-profiling",
+  "title": "Apple Neural Engine, CoreML & Profiling on Apple Silicon",
+  "description": "The Apple Neural Engine (ANE) is invisible to PyTorch and MLX — to reach it you go through CoreML. Learn the conversion path, heterogeneous CPU/GPU/ANE execution, and how to profile with Instruments and torch.mps.profiler.",
+  "course": "mps",
+  "sections": [
+    {
+      "title": "What is the Apple Neural Engine?",
+      "content": "Coming soon — the ANE is a separate, specialized accelerator in every M-series chip that PyTorch and MLX cannot directly target.\n\n<!-- TODO:\n  - Hardware overview: 16-core ANE on M-series, fixed-function int8/fp16 matrix engines.\n  - Why PyTorch can't dispatch to it: ANE is reachable only via the CoreML runtime (no public low-level API).\n  - Power / thermal envelope: ANE is the most efficient option for sustained inference; GPU has higher peak FLOPS but draws more power and hits thermal throttling sooner on laptops.\n  - When ANE actually wins (small-to-medium inference, latency-sensitive on-device), and when it doesn't (training, large models, custom ops).\n-->\n\n```\n[Coming soon]\n```"
+    },
+    {
+      "title": "PyTorch -> CoreML -> ANE",
+      "content": "Coming soon — the practical conversion pipeline from a trained PyTorch model to an ANE-eligible CoreML model.\n\n<!-- TODO:\n  - The path: PyTorch -> torch.jit.trace / torch.export -> coremltools.convert -> .mlpackage.\n  - compute_units: ALL vs CPU_AND_NE vs CPU_AND_GPU; how to encourage the runtime to schedule onto the ANE.\n  - Op compatibility: which PyTorch ops map cleanly, which fall back to GPU/CPU, how to inspect with the CoreML model viewer.\n  - Heterogeneous execution: a single inference graph using all three (CPU + GPU + ANE).\n  - Profiling: Instruments (Metal System Trace, CoreML template), xctrace, torch.mps.profiler for the parts still on GPU.\n  - Worked example: convert a small classifier to CoreML, profile ANE vs MPS latency on the same model, compare.\n-->\n\n```\n[Coming soon]\n```"
+    }
+  ]
+}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { curatedPRs } from '../content/modules'
+import { curatedPRs } from '../content/courses'
 
 export default function PRReview() {
   const [tab, setTab] = useState('curated')

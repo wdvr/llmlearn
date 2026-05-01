@@ -1,0 +1,16 @@
+{
+  "id": "mps-metal-shaders",
+  "title": "Custom Metal Shaders via torch.mps.compile_shader",
+  "description": "Write custom Metal Shading Language (MSL) kernels and dispatch them from PyTorch. Learn the Apple GPU's threadgroup model, simdgroup intrinsics, and how torch.mps.compile_shader bridges Python and Metal.",
+  "course": "mps",
+  "sections": [
+    {
+      "title": "Why Custom Kernels?",
+      "content": "Coming soon — this module will cover when and why you'd reach for a custom Metal Shading Language (MSL) kernel instead of stock PyTorch ops.\n\n<!-- TODO:\n  - Motivate: fused softmax, fused GELU, custom attention; cases where the eager PyTorch op chain is memory-bound and a single fused kernel halves wall time.\n  - Show a real measurement: e.g. fused softmax+dropout vs. composed ops on M2 Max.\n  - Compare to CUDA's analogous story (numba.cuda / Triton) so readers coming from the CUDA course have a hook.\n  - Link to torch.mps.compile_shader (PyTorch 2.5+) docs and the older MetalKernel extension API.\n-->\n\n```\n[Coming soon]\n```"
+    },
+    {
+      "title": "Metal Shading Language Basics",
+      "content": "Coming soon — a primer on Metal Shading Language (MSL): kernel functions, threadgroups, threadgroup memory, SIMD-group intrinsics.\n\n<!-- TODO:\n  - Map MSL concepts to CUDA equivalents: kernel = __global__, threadgroup = block, simdgroup = warp, threadgroup_barrier(metal::mem_flags::mem_threadgroup) = __syncthreads().\n  - Worked example kernel: vector add in MSL, dispatched via torch.mps.compile_shader.\n  - simd_shuffle, simdgroup_matrix (Apple's tensor-core analogue on M3+/M4).\n  - Debugging with Metal Frame Capture in Xcode.\n-->\n\n```\n[Coming soon]\n```"
+    }
+  ]
+}

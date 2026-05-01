@@ -1,0 +1,108 @@
+{
+  "id": "mps-tensor-fundamentals",
+  "title": "Tensor Fundamentals on MPS",
+  "description": "Tensors, dtypes, and the precision-speed tradeoff — through the lens of Apple Silicon. Why bfloat16 wins on MPS, where the fp64 trap really comes from, and how to avoid silent dtype promotion bugs.",
+  "course": "mps",
+  "sections": [
+    {
+      "title": "What is a Tensor?",
+      "content": "### Tensors: the unit of every computation\n\nA **tensor** is a multi-dimensional array of numbers. In PyTorch:\n\n```python\nx = torch.tensor([1, 2, 3])  # 1-D: shape (3,)\ny = torch.randn(2, 3, 4)     # 3-D: shape (2, 3, 4)\nz = torch.ones(5)             # 1-D: shape (5,)\n```\n\nEach tensor has four critical properties:\n\n1. **Shape** (dimensions): `x.shape` — used for broadcasting and linear-algebra checks.\n2. **Dtype** (data type): `x.dtype` — determines precision and speed.\n3. **Device**: `x.device` — CPU, MPS, CUDA, etc.\n4. **Requires_grad**: `x.requires_grad` — whether to track gradients for training.\n\n```python\nx = torch.randn(3, 4, 5)\nprint(f\"Shape: {x.shape}\")           # torch.Size([3, 4, 5])\nprint(f\"Dtype: {x.dtype}\")           # torch.float32\nprint(f\"Device: {x.device}\")         # cpu\nprint(f\"Requires grad: {x.requires_grad}\")  # False (by default)\n```\n\n### Why This Matters on MPS Specifically\n\nTensors are the **fundamental unit** in deep learning. Everything — inputs, weights, activations, gradients — is a tensor. On MPS, the dtype/device pair is doubly important because:\n\n1. **Shape mismatches crash your model** the same way they do everywhere.\n2. **Dtype determines accuracy and speed**, and on MPS one wrong dtype (`float64`) raises `RuntimeError` instead of silently slowing down.\n3. **Device placement matters more on a unified-memory chip too** — the GPU dispatcher only runs ops on tensors actually marked `device='mps'`, even though they sit in the same physical RAM as your CPU tensors.\n4. **`requires_grad` turns on backpropagation**; gradient kernels on MPS have improved a lot but still occasionally fall back to CPU."
+    },
+    {
+      "title": "Tensor Operations: Creation, Indexing, Broadcasting",
+      "content": "### Creating Tensors\n\nThe most common factory functions every PyTorch user should know:\n\n```python\nimport torch\n\ntorch.zeros(3, 4)               # all zeros, shape (3, 4)\ntorch.ones(2, 3)                # all ones\ntorch.full((2, 3), 7.0)          # filled with a constant\ntorch.eye(4)                    # identity matrix\ntorch.arange(0, 10, 2)           # [0, 2, 4, 6, 8]\ntorch.linspace(0, 1, 5)          # [0.00, 0.25, 0.50, 0.75, 1.00]\ntorch.randn(2, 3)               # standard normal\ntorch.rand(2, 3)                # uniform [0, 1)\ntorch.empty(2, 3)               # uninitialized (faster, contains garbage)\ntorch.zeros_like(x)             # match shape/dtype/device of x\n```\n\nPrefer `*_like` and `dtype=`/`device=` arguments at creation time — it is far cheaper to allocate on the right device than to allocate on CPU and `.to(device)` afterwards. On MPS this is especially relevant: even though unified memory makes the copy cheap, you still pay for the MPS allocator bookkeeping and the implicit synchronization that follows a `.to('mps')`.\n\n### Indexing and Advanced Selection\n\nPyTorch supports NumPy-style basic slicing plus several powerful selection patterns:\n\n```python\nx = torch.arange(24).reshape(4, 6)\n\nx[0]          # row 0\nx[:, 1]       # column 1\nx[1:3, 2:5]   # 2x3 block\n\n# Boolean mask\nmask = x > 10\nx[mask]                    # 1-D tensor of all elements > 10\n\n# Integer index (\"fancy\" indexing)\nrows = torch.tensor([0, 2, 3])\nx[rows]                    # rows 0, 2, 3 (shape 3x6)\n\n# torch.gather: pick one element per row along a dim\nidx = torch.tensor([[1], [3], [0], [5]])  # one column index per row\nx.gather(dim=1, index=idx)                # shape (4, 1)\n\n# torch.scatter: write values into positions\nout = torch.zeros(4, 6, dtype=torch.long)\nout.scatter_(dim=1, index=idx, src=torch.ones_like(idx))\n```\n\n`gather`/`scatter` are the workhorses behind one-hot encoding, top-k selection, and sparse routing layers (e.g. Mixture-of-Experts). Both have full MPS coverage in modern PyTorch (≥2.3).\n\n### Broadcasting\n\nBroadcasting lets PyTorch operate on tensors of different shapes without explicit copies. The rule, applied right-to-left over the dims:\n\n1. Pad the shorter shape on the left with 1s until ranks match.\n2. Two dims are compatible if they are equal or one of them is 1.\n3. The output shape takes the larger of the two on each dim.\n\n```python\na = torch.randn(4, 1, 6, device='mps')   # shape (4, 1, 6)\nb = torch.randn(   3, 6, device='mps')   # shape (3, 6) -> treated as (1, 3, 6)\n(a + b).shape              # (4, 3, 6)\n```\n\nA frequent bug: silently broadcasting where you meant to error. If you compute `pred - target` and one is `(N,)` while the other is `(N, 1)`, you get an `(N, N)` outer-difference instead of an `(N,)` residual. Always print shapes when results look weird.\n\n### `view`, `reshape`, `permute`, `transpose`, `contiguous`\n\nThese four operations cause more attention-implementation bugs than anything else.\n\n- `view(shape)` — returns a new view with the requested shape; **requires the tensor to be contiguous** in memory. Fast (no copy).\n- `reshape(shape)` — same intent, but copies if needed. Always works.\n- `transpose(dim0, dim1)` — swap two dims. Returns a non-contiguous view.\n- `permute(*dims)` — arbitrary reordering of dims. Also non-contiguous.\n- `.contiguous()` — make a fresh, contiguous copy. Required before `view` after a `transpose`/`permute`.\n\n```python\nx = torch.randn(2, 3, 4, device='mps')\ny = x.transpose(0, 1)              # shape (3, 2, 4), NOT contiguous\n# y.view(3, 8)                    # RuntimeError: view requires contiguous\ny = y.contiguous().view(3, 8)     # OK\n# Or just:\ny = x.transpose(0, 1).reshape(3, 8)\n```\n\n### Einstein Summation: `einsum`\n\n`einsum` is the most readable way to express a contraction. The string names each axis; repeated names are summed, named axes appearing in the output are kept:\n\n```python\n# Batched matmul: A @ B for each batch\nA = torch.randn(8, 4, 5, device='mps')   # (batch, m, k)\nB = torch.randn(8, 5, 6, device='mps')   # (batch, k, n)\nC = torch.einsum('bmk,bkn->bmn', A, B)   # (batch, m, n)\n\n# Attention scores: (B, H, Q, D) x (B, H, K, D) -> (B, H, Q, K)\nQ = torch.randn(2, 4, 10, 8, device='mps')\nK = torch.randn(2, 4, 12, 8, device='mps')\nscores = torch.einsum('bhqd,bhkd->bhqk', Q, K)\n```\n\nThe equivalent without `einsum` is `torch.matmul(Q, K.transpose(-2, -1))` — same result, more boilerplate and easier to misalign axes."
+    },
+    {
+      "title": "Floating-Point Dtypes",
+      "content": "### Floating-Point Dtypes: The Precision-Speed Tradeoff\n\nAll floating-point formats follow IEEE 754: a sign bit, exponent bits, and mantissa bits.\n\n| Dtype | Bits | Exponent | Mantissa | Use Case | Support on MPS |\n|-------|------|----------|----------|----------|----------------|\n| **float32** | 32 | 8 | 23 | Default; training, inference | Full |\n| **float16** (half) | 16 | 5 | 10 | Speed, reduced memory | Yes (limited op coverage) |\n| **bfloat16** | 16 | 8 | 7 | Training without convergence loss | Yes (preferred low-precision dtype) |\n| **float64** | 64 | 11 | 52 | Scientific computing | **Not supported — RuntimeError** |\n\n```cudadiagram\nFloatFormatBits\n```\n\n### Understanding the Tradeoff\n\n**Exponent bits** determine the **range** of representable numbers. More exponent bits → wider range.\n**Mantissa bits** determine the **precision** (how close numbers can be together). More mantissa bits → finer resolution.\n\n- **float32**: 8 exponent (range ~10^-38 to 10^38), 23 stored mantissa bits → ~7 decimal digits of precision.\n- **float16**: 5 exponent (normal range ~6e-5 to 65504), 10 stored mantissa bits → ~3 decimal digits.\n- **bfloat16**: 8 exponent (same range as fp32), 7 stored mantissa bits + 1 implicit = 8 bits of significand → ~3 decimal digits.\n- **float64**: 11 exponent (range ~10^-308 to 10^308), 52 stored mantissa bits → ~15–17 decimal digits.\n\nOn the Apple GPU there is **no fp64 hardware at all** — that is the underlying reason the MPS backend refuses fp64 tensors rather than silently downcasting. Concretely on MPS, switching from fp32 to bf16 typically buys you anywhere from **1.5x to 3x** throughput depending on the op and the chip, plus halved memory traffic — and unlike on CUDA, you do *not* need a `GradScaler`."
+    },
+    {
+      "title": "bfloat16 vs float16 on Apple Silicon",
+      "content": "### Why bfloat16 Beats float16 for Training\n\nDuring neural-network training, gradients become very small. **float16** has only 5 exponent bits, so numbers below roughly 6×10⁻⁵ leave the normal range and start losing precision; below ~6×10⁻⁸ they vanish to zero entirely (denormal underflow). Once gradients underflow, weights stop updating and training stalls.\n\n```python\nimport torch\n\n# float16 cannot represent 1e-5 precisely; the closest representable value\n# is just above ~9.5e-6, and you lose multiple decimal digits of accuracy.\nx_fp16 = torch.tensor(1e-5, dtype=torch.float16)\nprint(x_fp16.item())   # something near 1e-5 but with visible quantization\n\n# bfloat16 has the same 8 exponent bits as float32, so 1e-5 is well within range\nx_bf16 = torch.tensor(1e-5, dtype=torch.bfloat16)\nprint(x_bf16.item())   # ~1.0e-5 (less mantissa precision, but range is fine)\n```\n\nWhen you run this yourself, copy the actual printed values rather than trusting any tutorial's hand-typed example — IEEE rounding rules don't care about our intuitions.\n\n**bfloat16** keeps the full 8 exponent bits (like float32) but sacrifices mantissa precision instead. This is **perfect for training on MPS**: you need wide range, neural nets are remarkably resilient to small precision losses, and Apple Silicon supports bf16 natively in the GPU's matmul units.\n\n- **float32**: safe default; use when training is slow.\n- **bfloat16**: best for training large models on MPS; combine with `torch.autocast(device_type='mps')` for automatic mixed precision.\n- **float16**: avoid on MPS for training. Op coverage is thinner than bf16, and gradient underflow is severe without a `GradScaler` (and `GradScaler` is a CUDA-only convenience). Use for inference if you must.\n- **float64**: never on MPS — RuntimeError.\n\n### Mixed Precision Training on MPS\n\nModern training uses **automatic mixed precision (AMP)**: compute most operations in bfloat16 (fast, low memory) but keep the loss and gradient master copy in float32 (accurate updates). On MPS this is one line:\n\n```python\nmodel = MyModel().to('mps')\noptimizer = torch.optim.AdamW(model.parameters())\n\nfor x, y in dataloader:\n    x, y = x.to('mps'), y.to('mps')\n\n    # Forward pass with automatic mixed precision (AMP)\n    with torch.autocast(device_type='mps', dtype=torch.bfloat16):\n        logits = model(x)              # operations cast to bfloat16\n        loss = criterion(logits, y)    # loss returned in float32\n\n    optimizer.zero_grad()\n    loss.backward()\n    optimizer.step()\n```\n\nThis is typically **10–30% faster** than pure float32 training on M-series chips, with no measurable accuracy loss for transformer architectures. Note the absence of `GradScaler` — it is unnecessary because bf16 has fp32's exponent range."
+    },
+    {
+      "title": "The fp64 Trap & Solutions",
+      "content": "### The fp64 Trap (Again, Because It Bites Everyone)\n\nThis is **THE** gotcha on MPS. A very common mistake:\n\n```python\nimport torch.nn as nn\n\nmodel = nn.Linear(10, 5)  # default dtype is float32\nmodel = model.to(\"mps\")\n\n# But if you call .double() (-> float64), it breaks on MPS:\nmodel = model.double()  # RuntimeError: float64 is not supported on MPS\n\n# Or when loading a model from CUDA (which might have float64 weights):\ncheckpoint = torch.load(\"model.pt\")  # might have float64 params\nmodel.load_state_dict(checkpoint)    # RuntimeError on MPS\n\n# Some pipelines silently promote intermediates to float64 for stability\nloss = torch.nn.functional.l1_loss(pred, target)\n```\n\n```mermaid\nflowchart TD\n  A[\"Create / load tensor\"] --> B{\"dtype == float64?\"}\n  B -- \"No (fp32/bf16/fp16)\" --> C[\"Move to MPS\"]\n  C --> OK([\"Works\"])\n  B -- \"Yes\" --> D{\"On MPS?\"}\n  D -- \"No (CPU/CUDA)\" --> OK\n  D -- \"Yes\" --> E[\"RuntimeError:<br/>float64 not supported on MPS\"]\n  E --> F[\"Fix: .float() / map_location='cpu' /<br/>explicit dtype=torch.float32\"]\n  F --> C\n```\n\n### Solutions\n\n**Solution 1**: explicitly specify float32 during model creation:\n\n```python\nmodel = nn.Linear(10, 5).float()  # explicit float32\nmodel = model.to(\"mps\")\n```\n\n**Solution 2**: convert your entire model to a safe dtype after loading:\n\n```python\ndef safe_load_on_device(model, checkpoint_path, device):\n    checkpoint = torch.load(checkpoint_path, map_location=device)\n    model.load_state_dict(checkpoint)\n    return model.float().to(device)  # ensure float32\n```\n\n**Solution 3**: use `map_location='cpu'` when loading, then move:\n\n```python\ncheckpoint = torch.load(\"model.pt\", map_location=\"cpu\")\nmodel.load_state_dict(checkpoint)\nmodel = model.float().to(\"mps\")  # convert and move\n```\n\n**Solution 4**: cast any stray fp64 parameters in-place before moving. Use `no_grad` and `copy_` rather than touching `.data` directly:\n\n```python\nwith torch.no_grad():\n    for param in model.parameters():\n        if param.dtype == torch.float64:\n            param.copy_(param.float())\nmodel = model.to(\"mps\")\n```\n\n### NumPy interop\n\nA related dtype trap: `numpy` defaults to `float64` for many constructors. `torch.from_numpy(np.ones(3))` gives you a float64 tensor — fine on CPU, broken on MPS.\n\n```python\nimport numpy as np\n\narr = np.ones(3)                       # dtype float64\nt = torch.from_numpy(arr)              # float64 tensor!\n# t = t.to(\"mps\")                      # would error\n\n# Safer\nt = torch.from_numpy(arr).float().to(\"mps\")\n# Or: arr = arr.astype(np.float32) first\n\n# Going back to NumPy: the tensor must be on CPU\nt_cpu = t.detach().cpu()\nnp_arr = t_cpu.numpy()                 # shares memory with t_cpu\n```\n\n`tensor.numpy()` requires a CPU tensor — on MPS or CUDA you must `.cpu()` first. The returned array shares memory with the CPU tensor (unless you `.clone()`), so mutating one mutates the other.\n\n### Practical Dtype Selection Guide (MPS)\n\n- **float32**: default. Safe, widely supported. Use unless training/inference is slow.\n- **bfloat16**: training large models (transformers). Combine with `torch.autocast(device_type='mps')` for AMP. No `GradScaler` needed.\n- **float16**: inference only on MPS; op coverage is thinner than bf16. Validate convergence carefully if you must train with it.\n- **float64**: never on MPS — will RuntimeError.\n- **int8 (quantization)**: limited support today; for serious inference quantization on Apple Silicon, MLX (covered in module 4) has a far richer story.",
+      "code": "import torch\nimport torch.nn as nn\n\n# 1. Tensor properties\nx = torch.randn(2, 3, 4)\nprint(f\"Shape: {x.shape}, Dtype: {x.dtype}, Device: {x.device}, Requires grad: {x.requires_grad}\")\n\n# 2. Create tensors with specific dtypes\ndevice = torch.device(\"mps\" if torch.backends.mps.is_available() else \"cpu\")\na = torch.randn(5, dtype=torch.float32, device=device)\nb = torch.randn(5, dtype=torch.bfloat16, device=device)\nc = torch.randn(5, dtype=torch.float16, device=device)\n\nprint(\"\\nDtype comparison:\")\nprint(f\"float32: {a.dtype}, bfloat16: {b.dtype}, float16: {c.dtype}\")\n\n# 3. Demonstrate float16 underflow with small numbers\nx_fp16 = torch.tensor(1e-5, dtype=torch.float16)\nx_bf16 = torch.tensor(1e-5, dtype=torch.bfloat16)\nx_fp32 = torch.tensor(1e-5, dtype=torch.float32)\nprint(\"\\nSmall value (1e-5) representation:\")\nprint(f\"float16: {x_fp16.item():.10e}\")\nprint(f\"bfloat16: {x_bf16.item():.10e}\")\nprint(f\"float32: {x_fp32.item():.10e}\")\n\n# 4. Create model and check dtype\nmodel = nn.Linear(10, 5).float().to(device)\nprint(f\"\\nModel on device: {next(model.parameters()).device}\")\nprint(f\"Model dtype: {next(model.parameters()).dtype}\")\n\n# 5. The fp64 trap (commented out to avoid crash on MPS)\nprint(\"\\nfp64 trap: uncomment below to test\")\n# bad_tensor = torch.randn(10, dtype=torch.float64, device=device)\n# RuntimeError on MPS: float64 is not supported\n\n# 6. Safe dtype conversion pattern\nmodel = nn.Linear(10, 5).to(device).float()\nprint(f\"Safe model dtype: {next(model.parameters()).dtype}\")\n\n# 7. AMP setup on MPS (no GradScaler needed)\nif device.type == \"mps\":\n    print(\"\\nAMP recipe on MPS: torch.autocast(device_type='mps', dtype=torch.bfloat16)\")\n\n# 8. Tensor creation with explicit device\nx = torch.randn(100, 50, device=device, dtype=torch.float32)\nprint(f\"\\nCreated tensor: shape {x.shape}, device {x.device}, dtype {x.dtype}\")",
+      "references": [
+        {
+          "title": "IEEE 754 Floating Point Standard",
+          "url": "https://en.wikipedia.org/wiki/IEEE_754"
+        },
+        {
+          "title": "bfloat16: A New Brain Floating Point Format",
+          "url": "https://en.wikipedia.org/wiki/Bfloat16_floating-point_format"
+        },
+        {
+          "title": "PyTorch Tensor Documentation",
+          "url": "https://pytorch.org/docs/stable/tensors.html"
+        },
+        {
+          "title": "PyTorch Autocast (Mixed Precision)",
+          "url": "https://pytorch.org/docs/stable/amp.html"
+        },
+        {
+          "title": "PyTorch DType Documentation",
+          "url": "https://pytorch.org/docs/stable/tensor_attributes.html#torch.dtype"
+        }
+      ]
+    }
+  ],
+  "quiz": [
+    {
+      "question": "Why is bfloat16 preferred over float16 for neural network training on MPS?",
+      "options": [
+        "bfloat16 is faster on all hardware",
+        "float16 has insufficient exponent bits, causing gradient underflow; bfloat16 preserves the exponent range",
+        "bfloat16 uses less memory than float16",
+        "float16 is not supported by PyTorch"
+      ],
+      "correct": 1,
+      "explanation": "float16 has only 5 exponent bits (~6e-5 to 65504 normal range), so tiny gradients underflow to zero. bfloat16 keeps 8 exponent bits like float32, preserving range while sacrificing precision—perfect for training where small precision loss is acceptable but gradient range matters. On MPS this is even more important because GradScaler is a CUDA-only convenience."
+    },
+    {
+      "question": "When is it appropriate to use float16 on MPS?",
+      "options": [
+        "Always; it's the fastest dtype on MPS",
+        "Never; float16 is not supported on MPS",
+        "For inference only, after careful validation that gradients don't underflow",
+        "For training large models to reduce memory usage"
+      ],
+      "correct": 2,
+      "explanation": "float16 has insufficient exponent bits for training (gradients underflow). It's suitable only for inference on MPS, where you don't compute gradients and the limited precision is acceptable. Validation is critical to ensure no accuracy loss."
+    },
+    {
+      "question": "What's the recommended AMP recipe on MPS?",
+      "options": [
+        "torch.autocast(device_type='cuda', dtype=torch.float16) with GradScaler",
+        "torch.autocast(device_type='mps', dtype=torch.bfloat16), no GradScaler",
+        "Manually casting every tensor to .half() before each layer",
+        "Setting torch.set_default_dtype(torch.bfloat16) globally"
+      ],
+      "correct": 1,
+      "explanation": "On MPS, wrap forward/loss in torch.autocast(device_type='mps', dtype=torch.bfloat16). bf16 has fp32's exponent range, so no GradScaler is needed — that's a CUDA-only convenience for fp16 underflow."
+    },
+    {
+      "question": "Why does torch.from_numpy(np.ones(3)) cause problems on MPS?",
+      "options": [
+        "torch.from_numpy is not implemented on MPS",
+        "NumPy defaults to float64 for many constructors; the resulting tensor errors when moved to MPS",
+        "NumPy arrays cannot be shared with the GPU under unified memory",
+        "from_numpy always copies, which is slow on MPS"
+      ],
+      "correct": 1,
+      "explanation": "NumPy's default float dtype is float64. torch.from_numpy preserves it, so you get a float64 tensor that fails when moved to MPS. Always .float() (or astype(np.float32) first) before moving to 'mps'."
+    },
+    {
+      "question": "Which factory function is most efficient for creating an MPS tensor of zeros that matches another MPS tensor's shape and dtype?",
+      "options": [
+        "torch.zeros(x.shape).to(x.device).to(x.dtype)",
+        "torch.zeros_like(x)",
+        "torch.tensor([0]*x.numel(), device='mps').reshape(x.shape)",
+        "x * 0.0"
+      ],
+      "correct": 1,
+      "explanation": "torch.zeros_like(x) allocates directly on x's device with x's dtype in a single call. The first option works but does an extra device transfer. The third allocates first on CPU. The fourth runs a multiply kernel for what should be a single allocation."
+    }
+  ]
+}
