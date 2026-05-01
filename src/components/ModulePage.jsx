@@ -25,7 +25,6 @@ mermaid.initialize({
 
 let mermaidIdCounter = 0
 function MermaidDiagram({ chart }) {
-  const ref = useRef(null)
   const [svg, setSvg] = useState('')
   const [error, setError] = useState(null)
 
@@ -33,7 +32,14 @@ function MermaidDiagram({ chart }) {
     let cancelled = false
     const id = `mermaid-${++mermaidIdCounter}`
     mermaid.render(id, chart).then(({ svg }) => {
-      if (!cancelled) setSvg(svg)
+      if (cancelled) return
+      // Mermaid sets max-width to the diagram's natural width, which makes
+      // small diagrams render tiny. Strip that and let the diagram scale to
+      // the container width.
+      const scaled = svg
+        .replace(/max-width:\s*[\d.]+px;?/g, '')
+        .replace(/<svg /, '<svg style="width:100%;height:auto;max-height:600px;" ')
+      setSvg(scaled)
     }).catch(err => {
       if (!cancelled) setError(err.message || String(err))
     })
@@ -52,7 +58,6 @@ function MermaidDiagram({ chart }) {
 
   return (
     <div
-      ref={ref}
       style={{
         margin: '16px 0',
         padding: '16px',
@@ -64,6 +69,10 @@ function MermaidDiagram({ chart }) {
       dangerouslySetInnerHTML={{ __html: svg }}
     />
   )
+}
+
+function slugify(s) {
+  return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 }
 
 // Render markdown-ish content: fenced code blocks, **bold**, `code`, [text](url), lists, tables
@@ -315,7 +324,7 @@ export default function ModulePage({ modules, completed, onComplete, onQuizScore
 
       {module.sections.map((section, i) => (
         <div key={i} className="section">
-          <h3>{section.title}</h3>
+          <h3 id={slugify(section.title)} style={{ scrollMarginTop: '20px' }}>{section.title}</h3>
           <div className="section-content">
             {renderMarkdown(section.content)}
           </div>

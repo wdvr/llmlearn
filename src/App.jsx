@@ -118,18 +118,42 @@ function App() {
                 <span>Overview</span>
               </Link>
 
-              {activeCourse.modules.map((mod) => (
-                <Link
-                  key={mod.id}
-                  to={`/module/${mod.id}`}
-                  className={`nav-item ${
-                    location.pathname === `/module/${mod.id}` ? 'active' : ''
-                  } ${completed.includes(mod.id) ? 'completed' : ''}`}
-                >
-                  <span className="nav-dot" />
-                  <span>{mod.title}</span>
-                </Link>
-              ))}
+              {activeCourse.modules.map((mod) => {
+                const isActive = location.pathname === `/module/${mod.id}`
+                return (
+                  <React.Fragment key={mod.id}>
+                    <Link
+                      to={`/module/${mod.id}`}
+                      className={`nav-item ${isActive ? 'active' : ''} ${completed.includes(mod.id) ? 'completed' : ''}`}
+                    >
+                      <span className="nav-dot" />
+                      <span>{mod.title}</span>
+                    </Link>
+                    {isActive && mod.sections && mod.sections.length > 1 && (
+                      <div className="nav-subsections">
+                        {mod.sections.map((s) => {
+                          const slug = String(s.title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+                          const active = currentSection === s.title
+                          return (
+                            <a
+                              key={slug}
+                              href={`#${slug}`}
+                              className={`nav-subitem ${active ? 'active' : ''}`}
+                              onClick={(e) => {
+                                e.preventDefault()
+                                const el = document.getElementById(slug)
+                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                              }}
+                            >
+                              {s.title}
+                            </a>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </React.Fragment>
+                )
+              })}
 
               {activeCourse.curatedPRs && activeCourse.curatedPRs.length > 0 && (
                 <>

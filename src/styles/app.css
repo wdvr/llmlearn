@@ -125,6 +125,38 @@ code, pre {
   background: var(--accent);
 }
 
+.nav-subsections {
+  display: flex;
+  flex-direction: column;
+  margin: 2px 0 6px 0;
+  border-left: 1px solid var(--border);
+  margin-left: 25px;
+}
+
+.nav-subitem {
+  display: block;
+  padding: 5px 12px;
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--text-muted);
+  text-decoration: none;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+  margin-left: -1px;
+  transition: all 0.15s;
+}
+
+.nav-subitem:hover {
+  color: var(--text);
+  background: var(--bg-tertiary);
+}
+
+.nav-subitem.active {
+  color: var(--accent);
+  border-left-color: var(--accent);
+  background: rgba(56, 139, 253, 0.07);
+}
+
 .sidebar-footer {
   padding: 12px 20px;
   border-top: 1px solid var(--border);
