@@ -16,6 +16,10 @@ export const modules = [
       { title: 'Copy vs View: The Bug You\'ll Make Twice' },
     ],
     loader: () => import('./modules/module1-tensors-devices.json'),
+    relatedModules: [
+      { id: 'cuda-intro-gpu', note: 'Why GPU? The hardware reasons CPUs hit a wall.' },
+      { id: 'mps-tensor-fundamentals', note: 'Same topic on Apple Silicon — fp64 trap and bf16.' },
+    ],
   },
   {
     id: 'autograd-backprop',
@@ -56,6 +60,10 @@ export const modules = [
       { title: 'Cross-Attention & KV Cache' },
     ],
     loader: () => import('./modules/module5-attention.json'),
+    relatedModules: [
+      { id: 'cuda-tiling-matmul', note: 'How the matmul inside Q@K^T actually runs on the GPU.' },
+      { id: 'cuda-tensor-cores', note: 'Why FP16/BF16 attention is 5-10x faster than FP32.' },
+    ],
   },
   {
     id: 'tiny-transformer',
@@ -65,6 +73,10 @@ export const modules = [
       { title: 'Full Transformer Architecture' },
     ],
     loader: () => import('./modules/module6-transformer.json'),
+    relatedModules: [
+      { id: 'cuda-tiling-matmul', note: 'The kernel underneath every Linear layer.' },
+      { id: 'mps-mlx-framework', note: 'A high-level transformer in MLX on Apple Silicon.' },
+    ],
   },
   {
     id: 'training-inference-details',
@@ -78,6 +90,10 @@ export const modules = [
       { title: 'Sampling: Temperature, Top-k, Top-p' },
     ],
     loader: () => import('./modules/module7-training.json'),
+    relatedModules: [
+      { id: 'cuda-mixed-precision', note: 'The precision layer beneath autocast — why BF16 wins on Ampere+.' },
+      { id: 'cuda-streams-graphs', note: 'How CUDA Graphs make your training and inference loops faster.' },
+    ],
   },
   {
     id: 'modern-llm-arch',
@@ -100,6 +116,9 @@ export const modules = [
       { title: 'Multi-head Latent Attention (MLA)' },
     ],
     loader: () => import('./modules/module9-moe-mla.json'),
+    relatedModules: [
+      { id: 'cuda-tensor-cores', note: 'Tensor Cores at the FFN core of every MoE expert.' },
+    ],
   },
 ]
 

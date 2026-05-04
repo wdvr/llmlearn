@@ -13,7 +13,7 @@ import ColabExercise from './ColabExercise'
 import LocalExercise from './LocalExercise'
 import CodeBlock from './CodeBlock'
 import * as CudaDiagrams from './CudaDiagrams'
-import { findModuleCourse, loadModule } from '../content/courses'
+import { findModuleCourse, findModule, loadModule } from '../content/courses'
 
 SyntaxHighlighter.registerLanguage('python', python)
 SyntaxHighlighter.registerLanguage('cpp', cpp)
@@ -492,6 +492,35 @@ export default function ModulePage({ modules, completed, onComplete, onUncomplet
           moduleId={module.id}
           onScore={(score, total) => onQuizScore?.(module.id, score, total)}
         />
+      )}
+
+      {manifestModule?.relatedModules && manifestModule.relatedModules.length > 0 && (
+        <section className="related-modules" aria-labelledby="related-heading">
+          <h3 id="related-heading">Related across courses</h3>
+          <div className="related-list">
+            {manifestModule.relatedModules.map(({ id: relId, note }) => {
+              const rel = findModule(relId)
+              const relCourse = findModuleCourse(relId)
+              if (!rel || !relCourse) return null
+              return (
+                <Link
+                  key={relId}
+                  to={`/module/${relId}`}
+                  className="related-card"
+                  style={{ '--course-color': relCourse.color }}
+                >
+                  <div className="related-icon" aria-hidden="true">{relCourse.icon}</div>
+                  <div className="related-text">
+                    <div className="related-course-tag">{relCourse.title}</div>
+                    <div className="related-title">{rel.title}</div>
+                    {note && <div className="related-note">{note}</div>}
+                  </div>
+                  <div className="related-arrow" aria-hidden="true">→</div>
+                </Link>
+              )
+            })}
+          </div>
+        </section>
       )}
 
       {module.exercise && (() => {

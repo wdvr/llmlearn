@@ -14,6 +14,10 @@ export const modules = [
       { title: 'MPS Pitfalls & Synchronization' },
     ],
     loader: () => import('./mps-modules/mps01-apple-gpu-architecture.json'),
+    relatedModules: [
+      { id: 'cuda-intro-gpu', note: 'Why GPU at all — same hardware story, NVIDIA edition.' },
+      { id: 'tensors-devices', note: 'Device-agnostic PyTorch patterns that work on MPS and CUDA.' },
+    ],
   },
   {
     id: 'mps-tensor-fundamentals',
@@ -27,6 +31,10 @@ export const modules = [
       { title: 'The fp64 Trap & Solutions' },
     ],
     loader: () => import('./mps-modules/mps02-tensor-fundamentals-on-mps.json'),
+    relatedModules: [
+      { id: 'cuda-mixed-precision', note: 'BF16 vs FP16 vs TF32 vs FP8 — the full precision tour.' },
+      { id: 'tensors-devices', note: 'Tensors and dtypes from the PyTorch entry point.' },
+    ],
   },
   {
     id: 'mps-metal-shaders',
@@ -37,6 +45,11 @@ export const modules = [
       { title: 'Metal Shading Language Basics' },
     ],
     loader: () => import('./mps-modules/mps03-metal-shaders.json'),
+    relatedModules: [
+      { id: 'cuda-programming-model', note: 'CUDA threads/blocks/grids — the same mental model.' },
+      { id: 'cuda-memory-model', note: 'Shared memory in CUDA = threadgroup memory in Metal.' },
+      { id: 'cuda-tiling-matmul', note: 'The tiled-matmul pattern, in CUDA.' },
+    ],
   },
   {
     id: 'mps-mlx-framework',
@@ -47,6 +60,10 @@ export const modules = [
       { title: 'Lazy Evaluation & mx.eval()' },
     ],
     loader: () => import('./mps-modules/mps04-mlx-framework.json'),
+    relatedModules: [
+      { id: 'cuda-streams-graphs', note: 'CUDA Graphs — the NVIDIA equivalent of MLX\'s lazy graph capture.' },
+      { id: 'tiny-transformer', note: 'Build a transformer in PyTorch; same architecture in MLX.' },
+    ],
   },
   {
     id: 'mps-ane-coreml-profiling',

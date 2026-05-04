@@ -60,6 +60,7 @@ export const courses = [
 export const allModules = courses.flatMap(c => c.modules)
 export const findCourse = (courseId) => courses.find(c => c.id === courseId)
 export const findModuleCourse = (moduleId) => courses.find(c => c.modules.some(m => m.id === moduleId))
+export const findModule = (moduleId) => allModules.find(m => m.id === moduleId)
 
 // Dynamically import the full content for a module (sections.content, quiz, exercise).
 // Returns null if the id is unknown.

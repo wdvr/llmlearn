@@ -20,6 +20,10 @@ export const modules = [
       { title: 'Maximizing GPU Utilization' },
     ],
     loader: () => import('./cuda-modules/cuda01-intro-gpu.json'),
+    relatedModules: [
+      { id: 'tensors-devices', note: 'How PyTorch wraps the CPU/GPU split you just learned.' },
+      { id: 'mps-apple-gpu-architecture', note: 'How Apple Silicon does this differently — unified memory.' },
+    ],
   },
   {
     id: 'cuda-programming-model',
@@ -79,6 +83,10 @@ export const modules = [
       { title: 'When to Roll Your Own' },
     ],
     loader: () => import('./cuda-modules/cuda04-tiling-matmul.json'),
+    relatedModules: [
+      { id: 'attention-deeper', note: 'The matmul you just wrote is the inner kernel of Q@K^T.' },
+      { id: 'mps-metal-shaders', note: 'The same tiling technique, written in Metal Shading Language.' },
+    ],
   },
   {
     id: 'cuda-thread-execution',
@@ -236,6 +244,11 @@ export const modules = [
       { title: "When Tensor Cores Don't Help" },
     ],
     loader: () => import('./cuda-modules/cuda13-tensor-cores.json'),
+    relatedModules: [
+      { id: 'attention-deeper', note: 'The application: most flops in attention are FP16 Tensor Core matmuls.' },
+      { id: 'training-inference-details', note: 'PyTorch autocast — the high-level wrapper around all this.' },
+      { id: 'cuda-mixed-precision', note: 'The mixed-precision recipe Tensor Cores enable.' },
+    ],
   },
   {
     id: 'cuda-streams-graphs',
@@ -249,6 +262,10 @@ export const modules = [
       { title: 'Putting It Together: Modern Inference Stack' },
     ],
     loader: () => import('./cuda-modules/cuda14-streams-graphs.json'),
+    relatedModules: [
+      { id: 'training-inference-details', note: 'PyTorch CUDA Graphs in production training loops.' },
+      { id: 'mps-mlx-framework', note: 'MLX uses lazy graph capture — same idea, different runtime.' },
+    ],
   },
   {
     id: 'cuda-mixed-precision',
@@ -262,6 +279,10 @@ export const modules = [
       { title: 'FP8 and Beyond: Hopper, Blackwell, and Per-Tensor Scaling' },
     ],
     loader: () => import('./cuda-modules/cuda15-mixed-precision.json'),
+    relatedModules: [
+      { id: 'training-inference-details', note: 'PyTorch autocast & GradScaler — applied mixed precision.' },
+      { id: 'mps-tensor-fundamentals', note: 'BF16 vs FP16 on Apple Silicon — the same tradeoff.' },
+    ],
   },
   {
     id: 'cuda-optimization-capstone',
