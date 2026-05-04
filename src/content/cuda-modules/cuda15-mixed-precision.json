@@ -1,0 +1,102 @@
+{
+  "id": "cuda-mixed-precision",
+  "title": "Mixed Precision: FP16, BF16, TF32, FP8",
+  "description": "How to use reduced-precision math without breaking your model. Master loss scaling for FP16, why BF16 wins on Ampere+, when TF32 is a free win for FP32 code, and the per-tensor scaling required for FP8.",
+  "course": "cuda-parallel",
+  "sections": [
+    {
+      "title": "Why Mixed Precision Exists",
+      "content": "Tensor Cores need narrow inputs. Module 13 covered the *what*. This module covers the *how* — the recipes that make reduced-precision training and inference numerically stable.\n\nThe core idea: **store and multiply in narrow types, accumulate and update in wider types**. This gets you most of the speedup of native low-precision compute while keeping the long-running sums (the inner reduction in matmul, the gradient accumulation, the optimizer state) in a precision that doesn't drift.\n\n```mermaid\nflowchart TB\n  W[\"FP32 master weights\"] --> CW[\"BF16 / FP16 cast\"]\n  CW --> M[\"Tensor Core matmul\"]\n  X[\"BF16 / FP16 activations\"] --> M\n  M -->|\"FP32 accumulate\"| O[\"FP32 output\"]\n  O --> A[\"Activation in BF16\"]\n  A -. backprop .-> G[\"BF16 gradients\"]\n  G --> S[\"FP32 master grad\"]\n  S --> U[\"FP32 optimizer state\"]\n  U -->|\"step\"| W\n```\n\nThe FP32 master copy is the anchor. Casts to BF16/FP16 are the speed path. Wider accumulators inside the Tensor Core preserve the sum.\n\nThe rest of this module is a tour of the four formats you'll actually use, and the gotcha that comes with each."
+    },
+    {
+      "title": "FP16 + Loss Scaling: The Volta/Turing Recipe",
+      "content": "**FP16** has 5 exponent bits, 10 mantissa bits. Largest finite value: 65,504. Smallest normal positive value: ~6.1e-5. Anything outside this range overflows or underflows.\n\nDuring training:\n- **Forward pass** activations stay in [1e-5, 1e3] for normal models — fine.\n- **Backward pass** gradients can be tiny. The chain rule multiplies many derivatives together; small numbers compound.\n\nWith FP16 gradients, the smallest representable normal positive is ~6.1e-5. Gradients smaller than that **flush to zero** — silently. Your weights stop updating.\n\n### The fix: loss scaling\n\nMultiply the loss by a constant **S** (typically 2^15 to 2^24) before backprop. By the chain rule, every gradient is also multiplied by S, pushing them up into FP16 range. After backprop, before the optimizer step, divide gradients by S in FP32 to restore correct magnitudes.\n\n```python\n# PyTorch: torch.cuda.amp does this for you\nscaler = torch.cuda.amp.GradScaler()\nfor x, y in dataloader:\n    optimizer.zero_grad()\n    with torch.cuda.amp.autocast(dtype=torch.float16):   # cast model to FP16\n        out = model(x)\n        loss = loss_fn(out, y)\n    scaler.scale(loss).backward()    # multiplies loss by S, then backprops\n    scaler.step(optimizer)            # unscales, checks for NaN/Inf, steps\n    scaler.update()                   # adjusts S dynamically\n```\n\n### What `GradScaler` does dynamically\n\nIf any gradient is `inf` or `nan` after unscaling, the optimizer step is skipped and **S is halved** for the next iteration. If many iterations succeed, **S is doubled** to stay near the largest safe scale. Typical values stabilize at 2^15 to 2^17 in mid-training.\n\n### When FP16 + scaling pays off\n\n- Volta (V100), Turing (T4, RTX 20-series): no BF16, so FP16+scaling is the only Tensor Core path.\n- When you really need the extra mantissa bits (FP16 has 10 vs BF16's 7).\n- When your gradients are small enough that you genuinely need scaling.\n\n### The downside\n\nLoss scaling adds bookkeeping, can fail mid-training (sudden gradient spikes → NaN → S halves repeatedly → training stalls), and the dynamic scaling logic is the most common reason \"FP16 training\" PRs get reverted. **On Ampere+ you should default to BF16** unless you have a specific reason."
+    },
+    {
+      "title": "BF16: The Modern Default",
+      "content": "**BF16** (\"brain float\") uses FP32's 8 exponent bits with only 7 mantissa bits. Same range as FP32 (~3.4e38), much less precision (resolution ~7.8e-3 near 1.0).\n\nBF16 was designed by Google for TPUs precisely to avoid the loss-scaling problem. Same exponent as FP32 means **anything FP32 can represent, BF16 can also represent** — it just rounds the mantissa.\n\n### The recipe\n\n```python\nfor x, y in dataloader:\n    optimizer.zero_grad()\n    with torch.cuda.amp.autocast(dtype=torch.bfloat16):\n        out = model(x)\n        loss = loss_fn(out, y)\n    loss.backward()      # NO scaling — BF16 gradients fit in FP32 range\n    optimizer.step()\n```\n\nThat's it. No `GradScaler`, no NaN-check loop, no scale tuning.\n\n### When you need to be careful with BF16\n\nBF16's 7 mantissa bits give resolution ~7.8e-3 near 1.0. For weights and activations, this is fine — neural nets are noise-tolerant. For some operations the precision is *not* enough:\n\n1. **Reductions**: `tensor.sum()` over a million-element BF16 tensor will accumulate noticeable error. PyTorch keeps reductions in FP32 internally (`torch.sum` upcasts) but custom kernels need to know.\n2. **Layer norms with very small variance**: `(x - mean) / sqrt(var + eps)` — when var is in the 1e-4 range, BF16 representation jitters. PyTorch's LayerNorm forward keeps it in FP32 for this reason.\n3. **Final output projection in classification**: the logit margin between classes can be smaller than BF16 resolution. Many models keep the LM head in FP32.\n\nThe practical rule: **store and matmul in BF16; reduce, normalize, and softmax in FP32.** PyTorch's `autocast` does this automatically — its op list assigns each operation to the right precision.\n\n### Volta caveat\n\nBF16 is supported as Tensor Core inputs from **Ampere (sm_80)** onward. On Volta or Turing, `bfloat16.cuda()` works but matmul falls back to a slow FP32 path. If you're on T4 (Turing), use FP16 + GradScaler instead."
+    },
+    {
+      "title": "TF32: A Free Win for FP32 Code",
+      "content": "**TF32** is an Ampere+ trick: use FP32 storage on the outside, but truncate to a 19-bit format internally for the Tensor Core multiply. The format keeps FP32's 8 exponent bits (so range matches FP32 exactly) and only 10 mantissa bits.\n\nFor user code, **nothing changes**. You still pass FP32 tensors. cuBLAS sees them, runs the matmul on Tensor Cores in TF32 mode, and returns FP32 results. The only thing you lose is ~13 bits of mantissa precision in the inner mac — which is exactly the precision your code wasn't using anyway.\n\n### Speedup\n\nOn A100, TF32 gives ~10x speedup over strict FP32 for matmul. For free (no code changes), if you opt in.\n\n### How to opt in\n\n```python\nimport torch\ntorch.backends.cuda.matmul.allow_tf32 = True\ntorch.backends.cudnn.allow_tf32 = True\n```\n\nIn PyTorch 1.7-2.x, the default for `matmul.allow_tf32` flipped a few times. As of recent versions it's `True` for matmul on Ampere+ but may need explicit setting for backward compatibility. **Check the version you're running.**\n\n### When to NOT use TF32\n\nNumerically sensitive computations: scientific simulation, training without amp where you really do want bit-exact FP32, things that depend on machine epsilon. If you're training a transformer or running ML inference, you almost certainly want TF32 on.\n\n### TF32 vs BF16 vs FP32\n\nFor matmul-heavy work on Ampere+:\n\n| Path | Speedup vs FP32 | Numeric loss | Code change |\n|---|---|---|---|\n| FP32 (TF32 off) | 1x | none | none |\n| FP32 (TF32 on) | ~10x | ~13 bits in mantissa, range preserved | flag |\n| BF16 with autocast | ~16x | ~17 bits in mantissa, range preserved | a couple of context managers |\n| FP16 + GradScaler | ~16x | ~13 bits, range narrow | autocast + GradScaler |"
+    },
+    {
+      "title": "FP8 and Beyond: Hopper, Blackwell, and Per-Tensor Scaling",
+      "content": "**FP8** halves throughput-doubles every other gen and is the headline feature of Hopper and Blackwell. The Hopper Tensor Cores accept two FP8 variants:\n\n- **e4m3** (4 exponent bits, 3 mantissa, 1 sign): max ~448, more precision. Default for **forward activations and weights**.\n- **e5m2** (5/2/1): max ~57,000, less precision. Default for **backward gradients** (need range).\n\nThis is too narrow to use naively. e4m3's max is 448 — any activation > 448 saturates. The recipe:\n\n### Per-tensor scaling\n\nEach FP8 tensor carries an associated **scale factor** S in FP32. The actual value is `tensor_value * S`. Before a matmul, you bring inputs into an absolute range that fits in FP8 by adjusting their scales.\n\n```\nFP8 storage:        x_fp8     (1 byte/element)\nMetadata (FP32):    scale     (per tensor, sometimes per row/column)\nReconstructed value: x_fp8 * scale\n```\n\nPicking the scale dynamically is the hard part. NVIDIA's **Transformer Engine** library does this for you: it observes the recent maximum of each tensor over a sliding window of training steps and adjusts the scale to keep ~98% of values in range without saturating.\n\n```python\n# Transformer Engine, simplified\nimport transformer_engine.pytorch as te\nfp8_recipe = te.recipe.DelayedScaling(\n    fp8_format=te.recipe.Format.HYBRID,   # e4m3 fwd, e5m2 bwd\n    amax_history_len=1024,                 # observe last 1024 steps\n    amax_compute_algo='max',\n)\nlayer = te.Linear(in_features, out_features)\nwith te.fp8_autocast(enabled=True, fp8_recipe=fp8_recipe):\n    out = layer(x)   # FP8 matmul on Hopper\n```\n\n### Real-world impact\n\nFP8 training on Hopper roughly **doubles** throughput vs BF16, with minimal accuracy loss when the recipe is tuned correctly. For inference, FP8 KV-cache + FP8 weights nearly halves memory bandwidth and footprint.\n\n### Blackwell: FP4\n\nB200 (2024-2025) adds FP4 (1 sign + 3 mantissa OR 1+2+1 exponent variants), specifically for inference. With per-tensor or per-block scaling, well-designed models lose <1% accuracy. The throughput is again ~2x of FP8.\n\n### What this means for your code\n\nBelow Hopper: forget about FP8. Use BF16 (Ampere+) or FP16 + GradScaler (Volta/Turing).\n\nOn Hopper+: don't write FP8 code by hand. Use Transformer Engine, the FP8 paths in CUTLASS, or wait for PyTorch's native FP8 support to mature. Hand-tuned FP8 scaling is a research problem.\n\n### What to take away\n\n1. **Mixed precision is per-operation, not per-tensor.** You can have FP32 master weights, BF16 activations, FP32 LayerNorm internals, FP16 attention scores, and FP32 softmax — simultaneously. PyTorch's `autocast` already implements the right recipe; respect it.\n2. **BF16 is the default on Ampere+.** No loss scaling, same range as FP32, fits Tensor Cores at full speed.\n3. **TF32 is free.** Turn it on and your FP32 code gets 10x faster on matmul with no semantic change.\n4. **FP8 is a recipe, not a format.** Per-tensor scaling and a maintained scale-tracker are mandatory; don't roll your own.\n5. **The arc**: Volta FP16 → Ampere BF16/TF32 → Hopper FP8 → Blackwell FP4. Each generation halves the precision and roughly doubles throughput, with the recipe complexity moving to libraries."
+    }
+  ],
+  "quiz": [
+    {
+      "question": "Why does FP16 training need loss scaling but BF16 training doesn't?",
+      "options": [
+        "BF16 has more mantissa bits.",
+        "FP16's 5-bit exponent caps representable magnitudes at ~65,504 and floors them at ~6.1e-5; gradients during training routinely fall outside this range. BF16 has FP32's 8-bit exponent and the same range.",
+        "Loss scaling is forbidden on BF16 hardware.",
+        "BF16 has hardware NaN protection."
+      ],
+      "correct": 1,
+      "explanation": "FP16 has narrow range — gradients can underflow or overflow. Loss scaling pushes everything up by a power of 2 before backprop. BF16 keeps FP32's 8-bit exponent, so anything FP32 can represent, BF16 can too (with less precision). That's why BF16 became the modern default."
+    },
+    {
+      "question": "TF32 keeps FP32's exponent but truncates the mantissa to 10 bits. Which set of programs would NOT be safe to run with TF32 on?",
+      "options": [
+        "Training a transformer.",
+        "ResNet-50 image classification.",
+        "Numerical PDE solvers that depend on bit-exact FP32 to converge.",
+        "Stable Diffusion."
+      ],
+      "correct": 2,
+      "explanation": "TF32 silently changes the precision of matmul on Ampere+. ML workloads tolerate this fine because they're noise-robust. Bit-exact scientific computing (HPC PDEs, LAPACK reproducibility tests, some Kalman filters) cannot — that's why the default has historically been opt-in, not always-on."
+    },
+    {
+      "question": "PyTorch autocast wraps your model in `bfloat16` mode. Why does it leave LayerNorm and softmax in FP32 internally?",
+      "options": [
+        "Tensor Cores can't run softmax.",
+        "These ops contain reductions (sums) and divisions where BF16's 7-bit mantissa accumulates noticeable error; running them in FP32 protects numerical stability while the surrounding matmuls still use Tensor Cores.",
+        "FP32 is mandatory for autograd.",
+        "It's a bug — they should be BF16."
+      ],
+      "correct": 1,
+      "explanation": "BF16 mantissa is too small for stable accumulation across many elements (LayerNorm averages, softmax denominator). PyTorch's autocast op-list keeps these specific ops in FP32, while still casting the matmul inputs to BF16 to land on Tensor Cores. The casting happens automatically — you write `model(x)`."
+    },
+    {
+      "question": "You're on a T4 GPU (Turing, sm_75). Which mixed-precision recipe should you use?",
+      "options": [
+        "BF16 — same as Ampere.",
+        "FP8 with Transformer Engine.",
+        "FP16 with `torch.cuda.amp.GradScaler`. T4 has FP16 Tensor Cores but no native BF16 Tensor Core support — BF16 falls back to slow FP32.",
+        "TF32."
+      ],
+      "correct": 2,
+      "explanation": "BF16 Tensor Core support starts at Ampere (sm_80). On Turing, BF16 ops fall back to FP32 (no speedup). FP16+GradScaler is the only Tensor Core path. FP8 requires Hopper+ (sm_89/90)."
+    },
+    {
+      "question": "Why does FP8 training require per-tensor scaling but FP16/BF16 don't?",
+      "options": [
+        "FP8 has only 8 bits of storage, with so little dynamic range (e4m3 max ~448) that without per-tensor scaling values saturate or underflow constantly. BF16/FP16 have enough range to represent activation/gradient magnitudes directly.",
+        "FP8 is read in big-endian.",
+        "FP8 doesn't support negatives.",
+        "FP8 must be unsigned."
+      ],
+      "correct": 0,
+      "explanation": "BF16 has FP32-like range, so activations naturally fit. FP8 e4m3 maxes out at ~448 — common transformer activations exceed this routinely. Per-tensor scaling rescales each tensor to land most of its values in the [-448, 448] window, then unscales after the matmul. Transformer Engine maintains the scale histogram across recent steps."
+    },
+    {
+      "question": "On A100, which combination gives the largest matmul throughput for a 4096×4096 GEMM with all-FP32-friendly inputs and no code changes other than flags?",
+      "options": [
+        "Strict FP32, no TF32.",
+        "FP32 inputs with `torch.backends.cuda.matmul.allow_tf32 = True` — cuBLAS routes to TF32 Tensor Cores, ~10x speedup, no semantic change to user code.",
+        "FP64.",
+        "INT8."
+      ],
+      "correct": 1,
+      "explanation": "TF32 is the 'free win' path for FP32 code on Ampere+. The user-visible inputs and outputs remain FP32; only the internal Tensor Core multiply uses 10-bit mantissa. Roughly 10x speedup over strict FP32. Switching to BF16 with autocast is faster still (~16x) but requires opting into mixed precision in your training loop."
+    }
+  ],
+  "exercise": {
+    "title": "BF16 vs FP16 vs TF32 Speed/Accuracy Sweep",
+    "description": "Train a small MLP for 1 epoch on a synthetic regression task (or MNIST) under four precision regimes: (1) strict FP32, (2) TF32 (FP32 inputs, allow_tf32=True), (3) BF16 with autocast, (4) FP16 with autocast + GradScaler. For each, report: final loss, time/step, and whether `GradScaler` ever halved S (FP16 only). Plot final-loss-vs-time.\n\n**Bonus**: corrupt one input batch with a single 1e6 outlier value. FP16 should NaN; BF16 should not. Why?",
+    "starterCode": "import torch, torch.nn as nn, time\n\ntorch.manual_seed(0)\nB, D, H = 256, 512, 1024\ndevice = 'cuda'\n\ndef make_model():\n    return nn.Sequential(nn.Linear(D, H), nn.GELU(), nn.Linear(H, H), nn.GELU(), nn.Linear(H, 1)).to(device)\n\ndef one_epoch(amp_dtype=None, use_scaler=False, allow_tf32=False):\n    torch.backends.cuda.matmul.allow_tf32 = allow_tf32\n    torch.manual_seed(0)\n    model = make_model()\n    opt = torch.optim.AdamW(model.parameters(), lr=1e-3)\n    scaler = torch.cuda.amp.GradScaler() if use_scaler else None\n\n    losses, t0 = [], time.perf_counter()\n    for step in range(200):\n        x = torch.randn(B, D, device=device)\n        y = (x.sum(dim=-1, keepdim=True) > 0).float()\n        opt.zero_grad()\n        if amp_dtype is not None:\n            with torch.cuda.amp.autocast(dtype=amp_dtype):\n                pred = model(x)\n                loss = nn.functional.mse_loss(pred, y)\n        else:\n            pred = model(x)\n            loss = nn.functional.mse_loss(pred, y)\n        if scaler is not None:\n            scaler.scale(loss).backward()\n            scaler.step(opt)\n            scaler.update()\n        else:\n            loss.backward()\n            opt.step()\n        losses.append(loss.item())\n    torch.cuda.synchronize()\n    return losses[-1], time.perf_counter() - t0\n\nprint(f\"{'Regime':<25} {'Final loss':>11} {'Time(s)':>9}\")\nprint('-'*48)\nl, t = one_epoch(amp_dtype=None, allow_tf32=False); print(f'{\"FP32 strict\":<25} {l:11.4f} {t:9.2f}')\nl, t = one_epoch(amp_dtype=None, allow_tf32=True);  print(f'{\"FP32 + TF32 on\":<25} {l:11.4f} {t:9.2f}')\nl, t = one_epoch(amp_dtype=torch.bfloat16);          print(f'{\"BF16 autocast\":<25} {l:11.4f} {t:9.2f}')\nl, t = one_epoch(amp_dtype=torch.float16, use_scaler=True); print(f'{\"FP16 autocast+GradScaler\":<25} {l:11.4f} {t:9.2f}')",
+    "solution": "# Bonus: a single outlier exposes FP16's narrow range\n\ndef one_epoch_with_outlier(amp_dtype, use_scaler=False, outlier_step=50):\n    torch.manual_seed(0)\n    model = make_model()\n    opt = torch.optim.AdamW(model.parameters(), lr=1e-3)\n    scaler = torch.cuda.amp.GradScaler() if use_scaler else None\n    nan_step = None\n    for step in range(200):\n        x = torch.randn(B, D, device=device)\n        if step == outlier_step:\n            x[0, 0] = 1e6   # bomb!\n        y = (x.sum(dim=-1, keepdim=True) > 0).float()\n        opt.zero_grad()\n        with torch.cuda.amp.autocast(dtype=amp_dtype):\n            pred = model(x)\n            loss = nn.functional.mse_loss(pred, y)\n        if torch.isnan(loss) or torch.isinf(loss):\n            if nan_step is None: nan_step = step\n        if scaler is not None:\n            scaler.scale(loss).backward()\n            scaler.step(opt); scaler.update()\n        else:\n            loss.backward(); opt.step()\n    return nan_step\n\nprint('Outlier robustness:')\nprint(f'  FP16:  first NaN at step {one_epoch_with_outlier(torch.float16, use_scaler=True)}')\nprint(f'  BF16:  first NaN at step {one_epoch_with_outlier(torch.bfloat16)}')\n\n# Why: FP16 max finite value is 65,504. Activations near a 1e6 input feature\n# overflow to inf inside the first Linear layer. BF16 max is ~3.4e38, so 1e6\n# is fine — the model just sees a very weird sample and moves on. This is the\n# canonical 'BF16 wins' story for production training."
+  }
+}
