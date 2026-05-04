@@ -4,6 +4,20 @@
 
 export const modules = [
   {
+    id: 'tensors-devices',
+    title: 'Tensors, Dtypes & Devices',
+    description: 'The PyTorch starting line. What a tensor actually is, the dtypes you\'ll meet on day one, how devices (cpu / cuda / mps) and .to() work, and the copy-vs-view trap that causes a third of all PyTorch bugs.',
+    sections: [
+      { title: 'What Is a Tensor?' },
+      { title: 'Creating Tensors' },
+      { title: 'Dtypes: The Cheat Sheet' },
+      { title: 'Devices: cpu, cuda, mps' },
+      { title: 'Indexing, Slicing, and Broadcasting' },
+      { title: 'Copy vs View: The Bug You\'ll Make Twice' },
+    ],
+    loader: () => import('./modules/module1-tensors-devices.json'),
+  },
+  {
     id: 'autograd-backprop',
     title: 'Autograd & Backpropagation',
     description: 'Understand how PyTorch builds computation graphs and computes gradients automatically. Master the chain rule and why gradient accumulation is not a bug—it\'s a feature.',
