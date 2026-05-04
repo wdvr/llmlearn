@@ -10,24 +10,39 @@ const RouteFallback = () => (
   <div className="content"><p>Loading...</p></div>
 )
 
+const STORAGE_VERSION = 2
+
+function readStorage(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key)
+    if (raw == null) return fallback
+    return JSON.parse(raw)
+  } catch { return fallback }
+}
+
 function App() {
   const location = useLocation()
   const navigate = useNavigate()
-  const [completed, setCompleted] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem('completed') || '[]')
-    } catch { return [] }
-  })
+  const [completed, setCompleted] = useState(() => readStorage('completed', []))
   const [chatOpen, setChatOpen] = useState(false)
+  const [navOpen, setNavOpen] = useState(false)
   const [fontSize, setFontSize] = useState(() => {
     try { return parseInt(localStorage.getItem('font_size') || '15') } catch { return 15 }
   })
-  const [quizScores, setQuizScores] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem('quiz_scores') || '{}')
-    } catch { return {} }
-  })
+  const [quizScores, setQuizScores] = useState(() => readStorage('quiz_scores', {}))
+  const [lastVisited, setLastVisited] = useState(() => readStorage('last_visited', null))
   const [currentSection, setCurrentSection] = useState(null)
+
+  // One-time migration: stamp the schema version so future shape changes can
+  // diff against it without silently wiping user progress.
+  useEffect(() => {
+    try {
+      const v = parseInt(localStorage.getItem('schema_version') || '0')
+      if (v < STORAGE_VERSION) {
+        localStorage.setItem('schema_version', String(STORAGE_VERSION))
+      }
+    } catch {}
+  }, [])
 
   // Derive active course from URL
   const activeCourse = useMemo(() => {
@@ -36,6 +51,12 @@ function App() {
     const courseMatch = location.pathname.match(/^\/course\/(.+)$/)
     if (courseMatch) return findCourse(courseMatch[1])
     return null
+  }, [location.pathname])
+
+  const activeModule = useMemo(() => {
+    const m = location.pathname.match(/^\/module\/(.+)$/)
+    if (!m) return null
+    return allModules.find(x => x.id === m[1]) || null
   }, [location.pathname])
 
   // Build app context for Claude chat
@@ -82,10 +103,38 @@ function App() {
     localStorage.setItem('font_size', fontSize.toString())
   }, [fontSize])
 
+  // Track last-visited module for the "Resume" CTA on the landing page.
+  useEffect(() => {
+    if (activeModule) {
+      const entry = { moduleId: activeModule.id, ts: Date.now() }
+      setLastVisited(entry)
+      try { localStorage.setItem('last_visited', JSON.stringify(entry)) } catch {}
+    }
+  }, [activeModule?.id])
+
+  // Close mobile drawer on every navigation.
+  useEffect(() => { setNavOpen(false) }, [location.pathname])
+
   const markComplete = (moduleId) => {
     if (!completed.includes(moduleId)) {
       setCompleted([...completed, moduleId])
     }
+  }
+
+  const unmarkComplete = (moduleId) => {
+    setCompleted(completed.filter(id => id !== moduleId))
+  }
+
+  const resetProgress = () => {
+    if (!confirm('Reset all course progress? This clears completed modules and quiz scores. This cannot be undone.')) return
+    setCompleted([])
+    setQuizScores({})
+    setLastVisited(null)
+    try {
+      localStorage.removeItem('completed')
+      localStorage.removeItem('quiz_scores')
+      localStorage.removeItem('last_visited')
+    } catch {}
   }
 
   // Progress for active course or global
@@ -93,24 +142,48 @@ function App() {
   const courseCompleted = courseModules.filter(m => completed.includes(m.id)).length
   const progress = Math.round((courseCompleted / courseModules.length) * 100)
 
+  // Show "PR Review" in the global Tools section only if at least one course has curated PRs.
+  const anyCuratedPRs = courses.some(c => c.curatedPRs?.length > 0)
+
   return (
-    <div className="app">
+    <div className={`app ${navOpen ? 'nav-open' : ''}`}>
+      {/* Mobile top bar */}
+      <header className="mobile-topbar">
+        <button
+          className="hamburger"
+          onClick={() => setNavOpen(o => !o)}
+          aria-label={navOpen ? 'Close navigation' : 'Open navigation'}
+          aria-expanded={navOpen}
+        >
+          <span /><span /><span />
+        </button>
+        <Link to="/" className="mobile-brand" onClick={() => setNavOpen(false)}>
+          <span className="brand-dot" /> LLM Learn
+        </Link>
+        {activeCourse && (
+          <span className="mobile-course-badge" style={{ borderColor: activeCourse.color, color: activeCourse.color }}>
+            {activeCourse.icon}
+          </span>
+        )}
+      </header>
+
       {/* Sidebar */}
-      <nav className="sidebar">
+      <nav className={`sidebar ${navOpen ? 'open' : ''}`} aria-label="Course navigation">
         <div className="sidebar-header">
-          <h1>{activeCourse ? activeCourse.title : 'LLM Learn'}</h1>
-          <p>{activeCourse ? activeCourse.subtitle : 'Choose a course'}</p>
+          <Link to="/" className="brand-link" onClick={() => setNavOpen(false)}>
+            <span className="brand-dot" />
+            <span>
+              <h1>{activeCourse ? activeCourse.title : 'LLM Learn'}</h1>
+              <p>{activeCourse ? activeCourse.subtitle : 'GPU programming, end-to-end'}</p>
+            </span>
+          </Link>
         </div>
 
         <div className="sidebar-nav">
           {activeCourse ? (
             <>
-              <Link
-                to="/"
-                className="nav-item"
-                style={{ fontSize: '12px', color: 'var(--text-muted)', opacity: 0.7 }}
-              >
-                <span className="nav-dot" style={{ opacity: 0.4 }} />
+              <Link to="/" className="nav-item nav-back">
+                <span aria-hidden="true">←</span>
                 <span>All Courses</span>
               </Link>
 
@@ -178,31 +251,39 @@ function App() {
               <div className="nav-section">Courses</div>
               {courses.map(c => {
                 const done = c.modules.filter(m => completed.includes(m.id)).length
+                const pct = Math.round((done / c.modules.length) * 100)
                 return (
                   <Link
                     key={c.id}
                     to={`/course/${c.id}`}
-                    className={`nav-item ${location.pathname === `/course/${c.id}` ? 'active' : ''}`}
+                    className={`nav-item nav-course ${location.pathname === `/course/${c.id}` ? 'active' : ''}`}
+                    style={{ '--course-color': c.color }}
                   >
-                    <span className="nav-dot" />
-                    <span>{c.icon} {c.title}</span>
-                    {done > 0 && (
-                      <span style={{ marginLeft: 'auto', fontSize: '10px', color: 'var(--text-muted)' }}>
-                        {done}/{c.modules.length}
+                    <span className="nav-dot course-dot" />
+                    <span className="nav-course-text">
+                      <span className="nav-course-title">
+                        <span aria-hidden="true">{c.icon}</span> {c.title}
                       </span>
-                    )}
+                      <span className="nav-course-meta">
+                        {done}/{c.modules.length} · {pct}%
+                      </span>
+                    </span>
                   </Link>
                 )
               })}
 
-              <div className="nav-section">Tools</div>
-              <Link
-                to="/prs"
-                className={`nav-item ${location.pathname.startsWith('/prs') ? 'active' : ''}`}
-              >
-                <span className="nav-dot" />
-                <span>PR Review</span>
-              </Link>
+              {anyCuratedPRs && (
+                <>
+                  <div className="nav-section">Tools</div>
+                  <Link
+                    to="/prs"
+                    className={`nav-item ${location.pathname.startsWith('/prs') ? 'active' : ''}`}
+                  >
+                    <span className="nav-dot" />
+                    <span>PR Review</span>
+                  </Link>
+                </>
+              )}
             </>
           )}
         </div>
@@ -210,7 +291,7 @@ function App() {
         <div className="sidebar-footer">
           {activeCourse && (
             <>
-              <div className="progress-bar">
+              <div className="progress-bar" aria-label={`Course progress ${progress}%`}>
                 <div className="progress-fill" style={{ width: `${progress}%` }} />
               </div>
               <div className="progress-text">
@@ -218,30 +299,61 @@ function App() {
               </div>
             </>
           )}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '8px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <button onClick={() => setFontSize(s => Math.max(11, s - 1))} style={{ background: 'none', border: '1px solid var(--border)', color: 'var(--text-muted)', borderRadius: '3px', width: '20px', height: '20px', cursor: 'pointer', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>-</button>
-              <span style={{ fontSize: '10px', color: 'var(--text-muted)', minWidth: '22px', textAlign: 'center' }}>{fontSize}</span>
-              <button onClick={() => setFontSize(s => Math.min(20, s + 1))} style={{ background: 'none', border: '1px solid var(--border)', color: 'var(--text-muted)', borderRadius: '3px', width: '20px', height: '20px', cursor: 'pointer', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
+          <div className="footer-controls">
+            <div className="font-controls" role="group" aria-label="Font size">
+              <button
+                onClick={() => setFontSize(s => Math.max(11, s - 1))}
+                aria-label="Decrease font size"
+                title="Decrease font size"
+              >−</button>
+              <span className="font-size-value" aria-live="polite">{fontSize}</span>
+              <button
+                onClick={() => setFontSize(s => Math.min(20, s + 1))}
+                aria-label="Increase font size"
+                title="Increase font size"
+              >+</button>
             </div>
-            <span style={{ fontSize: '10px', color: 'var(--text-muted)', opacity: 0.5 }}>{__COMMIT_HASH__} — v{__BUILD_NUM__}</span>
+            <button
+              type="button"
+              className="reset-btn"
+              onClick={resetProgress}
+              title="Reset all progress"
+              aria-label="Reset all progress"
+            >Reset</button>
           </div>
-          <div style={{ textAlign: 'right', marginTop: '4px' }}>
+          <div className="footer-meta">
+            <span className="footer-build">{__COMMIT_HASH__} · v{__BUILD_NUM__}</span>
             <a
               href="/oauth2/sign_out?rd=https://auth.thelittleone.rocks/oauth2/sign_out?rd=https://llm.thelittleone.rocks"
-              style={{ color: 'var(--text-muted)', textDecoration: 'none', fontSize: '10px', opacity: 0.5 }}
-            >
-              logout
-            </a>
+              className="footer-logout"
+            >logout</a>
           </div>
         </div>
       </nav>
+
+      {/* Mobile backdrop */}
+      {navOpen && (
+        <div
+          className="nav-backdrop"
+          onClick={() => setNavOpen(false)}
+          aria-hidden="true"
+        />
+      )}
 
       {/* Main content */}
       <main className="main">
         <Suspense fallback={<RouteFallback />}>
           <Routes>
-            <Route path="/" element={<LandingPage courses={courses} completed={completed} />} />
+            <Route
+              path="/"
+              element={
+                <LandingPage
+                  courses={courses}
+                  completed={completed}
+                  lastVisited={lastVisited}
+                />
+              }
+            />
             <Route path="/course/:courseId" element={<CoursePage courses={courses} completed={completed} />} />
             <Route
               path="/module/:id"
@@ -250,16 +362,24 @@ function App() {
                   modules={allModules}
                   completed={completed}
                   onComplete={markComplete}
+                  onUncomplete={unmarkComplete}
                   onQuizScore={(moduleId, score, total) => {
-                    const updated = { ...quizScores, [moduleId]: { score, total } }
+                    const updated = { ...quizScores, [moduleId]: { score, total, ts: Date.now() } }
                     setQuizScores(updated)
-                    localStorage.setItem('quiz_scores', JSON.stringify(updated))
+                    try { localStorage.setItem('quiz_scores', JSON.stringify(updated)) } catch {}
+                    // Auto-mark complete when the user passes (≥ 70%).
+                    if (total > 0 && score / total >= 0.7) {
+                      markComplete(moduleId)
+                    }
                   }}
                   onSectionChange={setCurrentSection}
                 />
               }
             />
-            <Route path="/prs" element={<PRReview />} />
+            <Route
+              path="/prs"
+              element={<PRReview courses={courses} />}
+            />
           </Routes>
         </Suspense>
       </main>
@@ -268,22 +388,79 @@ function App() {
       <Suspense fallback={null}>
         <ClaudeChat isOpen={chatOpen} onClose={() => setChatOpen(false)} appContext={appContext} />
       </Suspense>
-      <button className="chat-toggle" onClick={() => setChatOpen(!chatOpen)} title="Ask Claude">
-        💬
+      <button
+        className="chat-toggle"
+        onClick={() => setChatOpen(!chatOpen)}
+        title="Ask Claude"
+        aria-label={chatOpen ? 'Close Claude chat' : 'Open Claude chat'}
+        aria-expanded={chatOpen}
+      >
+        <span aria-hidden="true">💬</span>
       </button>
     </div>
   )
 }
 
-function LandingPage({ courses, completed }) {
+function LandingPage({ courses, completed, lastVisited }) {
+  const totalModules = courses.reduce((acc, c) => acc + c.modules.length, 0)
+  const totalDone = courses.reduce(
+    (acc, c) => acc + c.modules.filter(m => completed.includes(m.id)).length,
+    0
+  )
+  const totalPct = totalModules ? Math.round((totalDone / totalModules) * 100) : 0
+
+  // Resolve last-visited module against the manifest so we can show its title.
+  const resumeModule = useMemo(() => {
+    if (!lastVisited?.moduleId) return null
+    for (const c of courses) {
+      const m = c.modules.find(x => x.id === lastVisited.moduleId)
+      if (m) return { module: m, course: c }
+    }
+    return null
+  }, [lastVisited, courses])
+
   return (
     <div className="home">
-      <h2>Choose a Course</h2>
-      <p className="subtitle">
-        Hands-on GPU programming courses — from PyTorch on Apple Silicon to CUDA parallel computing.
-      </p>
+      <section className="hero">
+        <h2>Learn how LLMs <em>actually</em> run on a GPU.</h2>
+        <p className="subtitle">
+          Three hands-on tracks — PyTorch, CUDA, and Apple MPS — with real exercises,
+          quizzes, and progress tracking. Pick a path below or pick up where you left off.
+        </p>
+        <div className="hero-stats">
+          <div className="hero-stat">
+            <div className="hero-stat-num">{courses.length}</div>
+            <div className="hero-stat-label">courses</div>
+          </div>
+          <div className="hero-stat">
+            <div className="hero-stat-num">{totalModules}</div>
+            <div className="hero-stat-label">modules</div>
+          </div>
+          <div className="hero-stat">
+            <div className="hero-stat-num">{totalPct}%</div>
+            <div className="hero-stat-label">your progress</div>
+          </div>
+        </div>
+        <div className="hero-progress" aria-label={`Overall progress ${totalPct}%`}>
+          <div className="hero-progress-fill" style={{ width: `${totalPct}%` }} />
+        </div>
+      </section>
 
-      <div className="module-cards">
+      {resumeModule && (
+        <Link to={`/module/${resumeModule.module.id}`} className="resume-card">
+          <div className="resume-icon" style={{ color: resumeModule.course.color }} aria-hidden="true">↪</div>
+          <div className="resume-text">
+            <div className="resume-label">Pick up where you left off</div>
+            <div className="resume-title">{resumeModule.module.title}</div>
+            <div className="resume-meta">{resumeModule.course.icon} {resumeModule.course.title}</div>
+          </div>
+          <div className="resume-cta">Resume →</div>
+        </Link>
+      )}
+
+      <h3 className="section-heading">Courses</h3>
+
+      <div className="course-cards">
         {courses.map(course => {
           const done = course.modules.filter(m => completed.includes(m.id)).length
           const pct = Math.round((done / course.modules.length) * 100)
@@ -291,19 +468,32 @@ function LandingPage({ courses, completed }) {
             <Link
               key={course.id}
               to={`/course/${course.id}`}
-              className="module-card"
-              style={{ borderLeft: `3px solid ${course.color}` }}
+              className="course-card"
+              style={{ '--course-color': course.color }}
             >
-              <div className="module-num" style={{ color: course.color, fontSize: '24px' }}>
-                {course.icon}
+              <div className="course-card-head">
+                <div className="course-icon" aria-hidden="true">{course.icon}</div>
+                {course.recommendedLabel && (
+                  <span className="course-badge">{course.recommendedLabel}</span>
+                )}
               </div>
-              <div className="module-card-text">
-                <h4>{course.title}</h4>
-                <p>{course.description}</p>
-                <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--text-muted)' }}>
-                  {course.modules.length} modules
-                  {done > 0 && ` — ${done} completed (${pct}%)`}
+              <h4>{course.title}</h4>
+              <p className="course-subtitle">{course.subtitle}</p>
+              <p className="course-desc">{course.description}</p>
+              <div className="course-meta">
+                <span>{course.modules.length} modules</span>
+                <span>·</span>
+                <span>{course.level}</span>
+                <span>·</span>
+                <span>{course.hours}</span>
+              </div>
+              <div className="course-progress">
+                <div className="course-progress-bar">
+                  <div className="course-progress-fill" style={{ width: `${pct}%` }} />
                 </div>
+                <span className="course-progress-text">
+                  {done > 0 ? `${done}/${course.modules.length} · ${pct}%` : 'Not started'}
+                </span>
               </div>
             </Link>
           )
@@ -326,25 +516,48 @@ function CoursePage({ courses, completed }) {
     )
   }
 
+  const done = course.modules.filter(m => completed.includes(m.id)).length
+  const pct = Math.round((done / course.modules.length) * 100)
+
   return (
     <div className="home">
-      <h2>{course.icon} {course.title}</h2>
-      <p className="subtitle">{course.description}</p>
+      <nav className="breadcrumb" aria-label="Breadcrumb">
+        <Link to="/">Courses</Link>
+        <span className="breadcrumb-sep" aria-hidden="true">/</span>
+        <span className="breadcrumb-current">{course.title}</span>
+      </nav>
+      <div className="course-header" style={{ '--course-color': course.color }}>
+        <div className="course-header-icon" aria-hidden="true">{course.icon}</div>
+        <div className="course-header-text">
+          <h2>{course.title}</h2>
+          <p className="subtitle">{course.description}</p>
+          <div className="course-meta">
+            <span>{course.modules.length} modules</span>
+            <span>·</span>
+            <span>{course.level}</span>
+            <span>·</span>
+            <span>{course.hours}</span>
+            <span>·</span>
+            <span>{done}/{course.modules.length} · {pct}%</span>
+          </div>
+          <div className="course-progress">
+            <div className="course-progress-bar">
+              <div className="course-progress-fill" style={{ width: `${pct}%` }} />
+            </div>
+          </div>
+        </div>
+      </div>
 
       {course.exerciseRuntime === 'colab' && (
-        <div style={{
-          padding: '12px 16px',
-          background: 'var(--bg-tertiary)',
-          borderRadius: '8px',
-          fontSize: '13px',
-          color: 'var(--text-muted)',
-          marginBottom: '24px',
-          border: '1px solid var(--border)',
-          lineHeight: 1.5
-        }}>
-          <strong style={{ color: 'var(--text)' }}>Exercises run on Google Colab</strong> with a free T4 GPU.
-          Code uses <code style={{ background: 'var(--bg)', padding: '1px 5px', borderRadius: '3px' }}>numba.cuda</code> — Python CUDA that runs real GPU kernels.
-          No local GPU needed.
+        <div className="callout callout-info">
+          <strong>Exercises run on Google Colab</strong> with a free T4 GPU. Code uses{' '}
+          <code>numba.cuda</code> — Python CUDA that runs real GPU kernels. No local GPU needed.
+        </div>
+      )}
+      {course.exerciseRuntime === 'local' && (
+        <div className="callout callout-info">
+          <strong>Exercises run locally</strong> on your Mac. You'll need PyTorch with MPS,
+          MLX, and (for some modules) Xcode command-line tools.
         </div>
       )}
 
@@ -366,8 +579,8 @@ function CoursePage({ courses, completed }) {
         ))}
 
         {course.curatedPRs && course.curatedPRs.length > 0 && (
-          <Link to="/prs" className="module-card">
-            <div className="module-num" style={{ color: '#bc8cff' }}>PR</div>
+          <Link to="/prs" className="module-card module-card-tool">
+            <div className="module-num module-num-tool">PR</div>
             <div className="module-card-text">
               <h4>{course.title} PR Review</h4>
               <p>Browse and study real PyTorch PRs related to the {course.title} backend</p>

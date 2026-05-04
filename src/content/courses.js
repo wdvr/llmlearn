@@ -2,6 +2,10 @@ import { modules as pytorchModules, loadModule as loadPytorchModule } from './mo
 import { modules as mpsModules, curatedPRs as mpsCuratedPRs, loadModule as loadMpsModule } from './mps-modules'
 import { modules as cudaModules, loadModule as loadCudaModule } from './cuda-modules'
 
+// Recommended order for new learners: PyTorch (the framework most people start
+// with) → CUDA (the foundations all of this is built on) → Apple MPS
+// (specialization for Mac users). The `order` field controls a small badge in
+// the UI ("Start here", "Then", "Specialize").
 export const courses = [
   {
     id: 'pytorch-llm',
@@ -10,22 +14,13 @@ export const courses = [
     description: 'Hands-on course covering autograd, attention, transformers, training loops, modern architectures, and MoE/MLA — device-agnostic.',
     icon: '🔥',
     color: '#58a6ff',
+    level: 'Beginner → Advanced',
+    hours: '12–16h',
+    order: 1,
+    recommendedLabel: 'Start here',
     modules: pytorchModules,
     curatedPRs: [],
     exerciseRuntime: 'pyodide',
-  },
-  {
-    id: 'apple-mps',
-    title: 'Apple Silicon GPU (MPS)',
-    subtitle: 'Metal Performance Shaders & MLX',
-    description: 'GPU programming on Apple Silicon — Metal Performance Shaders, custom Metal Shading Language kernels, MLX, the Apple Neural Engine, and CoreML.',
-    icon: '🍎',
-    color: '#bc8cff',
-    modules: mpsModules,
-    curatedPRs: mpsCuratedPRs,
-    // Colab T4 demonstrates the same patterns (autocast, AMP, etc.); a future
-    // LocalExercise component can let users run snippets natively on MPS.
-    exerciseRuntime: 'colab',
   },
   {
     id: 'cuda-parallel',
@@ -34,9 +29,28 @@ export const courses = [
     description: 'Master GPU programming from first principles. Write CUDA kernels in Python with numba.cuda — covering memory hierarchies, tiling, parallel patterns, and performance optimization on Google Colab T4.',
     icon: '⚡',
     color: '#3fb950',
+    level: 'Intermediate',
+    hours: '14–20h',
+    order: 2,
+    recommendedLabel: 'Then go deep',
     modules: cudaModules,
     curatedPRs: [],
     exerciseRuntime: 'colab',
+  },
+  {
+    id: 'apple-mps',
+    title: 'Apple Silicon GPU (MPS)',
+    subtitle: 'Metal Performance Shaders & MLX',
+    description: 'GPU programming on Apple Silicon — Metal Performance Shaders, custom Metal Shading Language kernels, MLX, the Apple Neural Engine, and CoreML.',
+    icon: '🍎',
+    color: '#bc8cff',
+    level: 'Intermediate',
+    hours: '8–10h',
+    order: 3,
+    recommendedLabel: 'Specialize on Mac',
+    modules: mpsModules,
+    curatedPRs: mpsCuratedPRs,
+    exerciseRuntime: 'local',
   },
 ]
 

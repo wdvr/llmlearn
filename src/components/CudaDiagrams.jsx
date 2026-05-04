@@ -145,11 +145,11 @@ export const TransferComputeBars = () => {
     <g>
       <text x={barX - 12} y={y + barH / 2 + 5} fontFamily={FONT} fontSize="12" fill={COLORS.text} textAnchor="end">{label}</text>
       <text x={barX - 12} y={y + barH / 2 + 22} fontFamily={FONT} fontSize="10" fill={COLORS.muted} textAnchor="end">{ai}</text>
-      {segments.reduce((acc, seg) => {
+      {segments.reduce((acc, seg, idx) => {
         const x = barX + (acc.offset / 100) * barW
         const w = (seg.pct / 100) * barW
         acc.nodes.push(
-          <g key={seg.label}>
+          <g key={idx}>
             <rect x={x} y={y} width={w} height={barH} fill={seg.color} stroke={COLORS.bg} strokeWidth="1" />
             {seg.pct >= 5 && (
               <text x={x + w / 2} y={y + barH / 2 - 2} fontFamily={FONT} fontSize="11" fill="#fff" textAnchor="middle">{seg.label}</text>

@@ -342,9 +342,8 @@ function inlineMarkdown(text) {
   return tokens;
 }
 
-export default function ModulePage({ modules, completed, onComplete, onQuizScore, onSectionChange }) {
+export default function ModulePage({ modules, completed, onComplete, onUncomplete, onQuizScore, onSectionChange }) {
   const { id } = useParams()
-  const navigate = useNavigate()
 
   // Scope navigation to the module's course (manifest data only).
   const course = findModuleCourse(id)
@@ -430,6 +429,17 @@ export default function ModulePage({ modules, completed, onComplete, onQuizScore
 
   return (
     <div className="content">
+      {course && (
+        <nav className="breadcrumb" aria-label="Breadcrumb">
+          <Link to="/">Courses</Link>
+          <span className="breadcrumb-sep" aria-hidden="true">/</span>
+          <Link to={`/course/${course.id}`}>{course.title}</Link>
+          <span className="breadcrumb-sep" aria-hidden="true">/</span>
+          <span className="breadcrumb-current">
+            {moduleIndex >= 0 ? `${moduleIndex + 1}. ` : ''}{module.title}
+          </span>
+        </nav>
+      )}
       <div className="module-header">
         <h2>{module.title}</h2>
         <p>{module.description}</p>
@@ -504,9 +514,13 @@ export default function ModulePage({ modules, completed, onComplete, onQuizScore
         ) : <div />}
 
         {completed.includes(module.id) ? (
-          <span className="btn btn-success" style={{ cursor: 'default' }}>
+          <button
+            className="btn btn-success"
+            onClick={() => onUncomplete?.(module.id)}
+            title="Click to mark as incomplete"
+          >
             ✓ Completed
-          </span>
+          </button>
         ) : (
           <button
             className="btn btn-primary"
