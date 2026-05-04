@@ -424,8 +424,9 @@ function LandingPage({ courses, completed, lastVisited }) {
       <section className="hero">
         <h2>Learn how LLMs <em>actually</em> run on a GPU.</h2>
         <p className="subtitle">
-          Three hands-on tracks — PyTorch, CUDA, and Apple MPS — with real exercises,
-          quizzes, and progress tracking. Pick a path below or pick up where you left off.
+          Three hands-on tracks — CUDA foundations first, then PyTorch for LLMs,
+          then Apple MPS if you're on a Mac. Real exercises, quizzes, progress
+          tracking. Pick a path below or pick up where you left off.
         </p>
         <div className="hero-stats">
           <div className="hero-stat">
