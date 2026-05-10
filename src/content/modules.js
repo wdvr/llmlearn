@@ -52,6 +52,28 @@ export const modules = [
     loader: () => import('./modules/module4-building-blocks.json'),
   },
   {
+    id: 'qkv-deep-dive',
+    title: 'Q, K, V from First Principles',
+    description: 'The deep dive on Query, Key, Value — the three matrices at the heart of every transformer. What each one actually is, why three projections instead of one, the dot-product-as-similarity geometry, the √d_k trick, softmax temperature, and a hand-traced example you can verify against PyTorch.',
+    sections: [
+      { title: 'The One Question Q/K/V Answers' },
+      { title: 'The Database Query Metaphor (Done Right)' },
+      { title: 'Why Three Different Projections' },
+      { title: 'Building Q, K, V Step by Step' },
+      { title: 'The Dot Product as Similarity' },
+      { title: 'Why Divide by √d_k' },
+      { title: 'Worked Example by Hand' },
+      { title: 'Common Bugs & Gotchas' },
+      { title: 'From Single-Head to Multi-Head, Briefly' },
+    ],
+    loader: () => import('./modules/module4b-qkv-deep-dive.json'),
+    relatedModules: [
+      { id: 'attention-deeper', note: 'Multi-head, masking, and KV cache — built on the Q/K/V you just learned.' },
+      { id: 'cuda-tiling-matmul', note: 'How the dot-product matmul actually runs on the GPU.' },
+      { id: 'cuda-tensor-cores', note: 'Why FP16 attention is 5-10x faster: the QK^T matmul lands on Tensor Cores.' },
+    ],
+  },
+  {
     id: 'attention-deeper',
     title: 'Attention, Deeper',
     description: 'Explore multi-head attention, cross-attention mechanisms, and KV caching for efficient inference. Understand how transformers achieve both representational power and computational efficiency.',
