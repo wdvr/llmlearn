@@ -1609,6 +1609,366 @@ code, pre {
   letter-spacing: 0.5px;
 }
 
+/* Python Scratchpad */
+.scratch-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  margin-bottom: 24px;
+  background: linear-gradient(135deg, rgba(63, 185, 80, 0.06), rgba(88, 166, 255, 0.04));
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--green);
+  border-radius: 10px;
+  text-decoration: none;
+  color: inherit;
+  transition: all 0.15s;
+}
+.scratch-card:hover {
+  border-color: var(--green);
+  background: linear-gradient(135deg, rgba(63, 185, 80, 0.10), rgba(88, 166, 255, 0.06));
+  transform: translateY(-1px);
+}
+.scratch-card-icon {
+  font-size: 28px;
+  line-height: 1;
+}
+.scratch-card-text { flex: 1; min-width: 0; }
+.scratch-card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+.scratch-card-desc {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+.scratch-card-cta {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--green);
+  white-space: nowrap;
+}
+
+.scratch-page kbd {
+  display: inline-block;
+  padding: 1px 6px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text);
+}
+.scratch-header { margin-bottom: 18px; }
+.scratch-header p { font-size: 13px; }
+
+/* Tab strip */
+.scratch-tabs-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.scratch-tabs {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  flex: 1;
+  min-width: 0;
+}
+.scratch-tabs::-webkit-scrollbar { display: none; }
+
+.scratch-tab {
+  display: inline-flex;
+  align-items: center;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  padding: 0;
+  font-size: 13px;
+  white-space: nowrap;
+  position: relative;
+  transition: background 0.15s, border-color 0.15s;
+}
+.scratch-tab.active {
+  background: var(--bg);
+  border-color: var(--accent);
+  border-bottom: 1px solid var(--bg);
+  margin-bottom: -1px;
+}
+.scratch-tab-name {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  padding: 8px 4px 8px 14px;
+  cursor: pointer;
+  font-weight: 500;
+}
+.scratch-tab.active .scratch-tab-name { color: var(--accent); }
+.scratch-tab:hover .scratch-tab-name { color: var(--text); }
+.scratch-tab.active:hover .scratch-tab-name { color: var(--accent); }
+.scratch-tab-close {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px 10px 4px 6px;
+  font-size: 16px;
+  line-height: 1;
+  border-radius: 4px;
+  opacity: 0.5;
+  transition: opacity 0.15s, color 0.15s;
+}
+.scratch-tab-close:hover { opacity: 1; color: var(--red); }
+.scratch-tab-rename {
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  padding: 4px 8px;
+  margin: 4px;
+  outline: none;
+  width: 14ch;
+}
+.scratch-tab-new {
+  background: transparent;
+  border: 1px dashed var(--border);
+  color: var(--text-muted);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  font-weight: 600;
+  align-self: center;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.scratch-tab-new:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* Toolbar */
+.scratch-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+.scratch-run {
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+/* Snippet chips */
+.scratch-snippets {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.scratch-snippets-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+}
+.scratch-snippet-chip {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: 'JetBrains Mono', monospace;
+  transition: all 0.15s;
+}
+.scratch-snippet-chip:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* Editor */
+.scratch-editor {
+  width: 100%;
+  min-height: 320px;
+  background: var(--code-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: var(--font-size-code);
+  line-height: 1.55;
+  resize: vertical;
+  outline: none;
+  tab-size: 4;
+  -moz-tab-size: 4;
+  white-space: pre;
+  overflow: auto;
+}
+.scratch-editor:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(56, 139, 253, 0.15);
+}
+
+/* Output */
+.scratch-output-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 18px 0 8px;
+  gap: 8px;
+}
+.scratch-output-head strong {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+}
+.scratch-output-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+  text-align: right;
+  word-break: break-word;
+}
+.scratch-output {
+  background: var(--code-bg);
+  color: var(--green);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  max-height: 360px;
+  min-height: 80px;
+  overflow-y: auto;
+  margin: 0;
+}
+
+/* Packages section */
+.scratch-packages {
+  margin-top: 24px;
+  padding: 14px 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.scratch-packages summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  user-select: none;
+}
+.scratch-packages summary:hover { color: var(--text); }
+.scratch-packages[open] summary { color: var(--text); margin-bottom: 10px; }
+.scratch-packages-help {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 8px 0 12px;
+  line-height: 1.5;
+}
+.scratch-package-row {
+  display: flex;
+  gap: 8px;
+}
+.scratch-package-input {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  outline: none;
+}
+.scratch-package-input:focus { border-color: var(--accent); }
+.scratch-package-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+.scratch-package-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 4px 3px 12px;
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text);
+}
+.scratch-package-remove {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0 8px;
+  font-size: 14px;
+  line-height: 1;
+  border-radius: 999px;
+}
+.scratch-package-remove:hover { color: var(--red); }
+
+@media (max-width: 768px) {
+  .scratch-page { padding: 16px 12px; }
+  .scratch-editor {
+    min-height: 240px;
+    font-size: 12px;
+    padding: 12px 14px;
+  }
+  .scratch-output {
+    max-height: 240px;
+    font-size: 11px;
+  }
+  .scratch-toolbar .btn {
+    flex: 1 1 calc(50% - 4px);
+    min-width: 0;
+    text-align: center;
+    font-size: 13px;
+    padding: 10px 8px;
+  }
+  .scratch-toolbar .scratch-run {
+    flex-basis: 100%;
+    padding: 12px;
+    font-size: 15px;
+  }
+  .scratch-tab-name { padding: 8px 2px 8px 10px; max-width: 14ch; overflow: hidden; text-overflow: ellipsis; }
+  .scratch-snippets-label { display: none; }
+  .scratch-output-head { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .scratch-output-meta { text-align: left; }
+  .scratch-card { padding: 12px 14px; }
+  .scratch-card-icon { font-size: 22px; }
+  .scratch-card-title { font-size: 14px; }
+  .scratch-card-desc { font-size: 12px; }
+  .scratch-card-cta { font-size: 12px; }
+}
+
 /* Related modules across courses */
 .related-modules {
   margin: 40px 0;

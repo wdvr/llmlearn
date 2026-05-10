@@ -5,6 +5,7 @@ import { courses, allModules, findCourse, findModuleCourse } from './content/cou
 const ModulePage = React.lazy(() => import('./components/ModulePage'))
 const PRReview = React.lazy(() => import('./components/PRReview'))
 const ClaudeChat = React.lazy(() => import('./components/ClaudeChat'))
+const Scratch = React.lazy(() => import('./components/Scratch'))
 
 const RouteFallback = () => (
   <div className="content"><p>Loading...</p></div>
@@ -233,17 +234,22 @@ function App() {
                 )
               })}
 
+              <div className="nav-section">Tools</div>
+              <Link
+                to="/scratch"
+                className={`nav-item ${location.pathname.startsWith('/scratch') ? 'active' : ''}`}
+              >
+                <span className="nav-dot" />
+                <span>Python Scratchpad</span>
+              </Link>
               {activeCourse.curatedPRs && activeCourse.curatedPRs.length > 0 && (
-                <>
-                  <div className="nav-section">Tools</div>
-                  <Link
-                    to="/prs"
-                    className={`nav-item ${location.pathname.startsWith('/prs') ? 'active' : ''}`}
-                  >
-                    <span className="nav-dot" />
-                    <span>PR Review</span>
-                  </Link>
-                </>
+                <Link
+                  to="/prs"
+                  className={`nav-item ${location.pathname.startsWith('/prs') ? 'active' : ''}`}
+                >
+                  <span className="nav-dot" />
+                  <span>PR Review</span>
+                </Link>
               )}
             </>
           ) : (
@@ -272,17 +278,22 @@ function App() {
                 )
               })}
 
+              <div className="nav-section">Tools</div>
+              <Link
+                to="/scratch"
+                className={`nav-item ${location.pathname.startsWith('/scratch') ? 'active' : ''}`}
+              >
+                <span className="nav-dot" />
+                <span>Python Scratchpad</span>
+              </Link>
               {anyCuratedPRs && (
-                <>
-                  <div className="nav-section">Tools</div>
-                  <Link
-                    to="/prs"
-                    className={`nav-item ${location.pathname.startsWith('/prs') ? 'active' : ''}`}
-                  >
-                    <span className="nav-dot" />
-                    <span>PR Review</span>
-                  </Link>
-                </>
+                <Link
+                  to="/prs"
+                  className={`nav-item ${location.pathname.startsWith('/prs') ? 'active' : ''}`}
+                >
+                  <span className="nav-dot" />
+                  <span>PR Review</span>
+                </Link>
               )}
             </>
           )}
@@ -380,6 +391,7 @@ function App() {
               path="/prs"
               element={<PRReview courses={courses} />}
             />
+            <Route path="/scratch" element={<Scratch />} />
           </Routes>
         </Suspense>
       </main>
@@ -458,6 +470,17 @@ function LandingPage({ courses, completed, lastVisited }) {
           <div className="resume-cta">Resume →</div>
         </Link>
       )}
+
+      <Link to="/scratch" className="scratch-card">
+        <div className="scratch-card-icon" aria-hidden="true">🐍</div>
+        <div className="scratch-card-text">
+          <div className="scratch-card-title">Python Scratchpad</div>
+          <div className="scratch-card-desc">
+            Quick Python 3.12 in your browser — multiple files, autosaved. No login.
+          </div>
+        </div>
+        <div className="scratch-card-cta">Open →</div>
+      </Link>
 
       <h3 className="section-heading">Courses</h3>
 
