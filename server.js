@@ -2,7 +2,9 @@ import express from 'express';
 import cors from 'cors';
 import { spawn } from 'child_process';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
+import Database from 'better-sqlite3';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -12,6 +14,112 @@ app.use(express.json({ limit: '2mb' }));
 
 // Serve static frontend (production)
 app.use(express.static(path.join(__dirname, 'dist')));
+
+// =============================================================================
+// Progress persistence (cross-device sync)
+// =============================================================================
+// Identity comes from the oauth2-proxy in front of the app. It sets headers
+// like X-Auth-Request-Email / X-Auth-Request-User. We treat any of those as
+// proof of authentication and key the user's stored state by email (preferred)
+// or username (fallback).
+//
+// Storage: one row per user, full state JSON blob. Client always writes a full
+// snapshot; merging happens on the client during the load step.
+
+const DATA_DIR = process.env.LLMLEARN_DATA_DIR || '/data';
+try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch {}
+const DB_PATH = path.join(DATA_DIR, 'progress.db');
+
+let db = null;
+try {
+  db = new Database(DB_PATH);
+  db.pragma('journal_mode = WAL');
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS progress (
+      user_id TEXT PRIMARY KEY,
+      data TEXT NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `);
+  console.log(`Progress DB ready at ${DB_PATH}`);
+} catch (err) {
+  console.error('Progress DB unavailable — running without server-side sync:', err.message);
+  db = null;
+}
+
+function getUser(req) {
+  // oauth2-proxy default header names. Different deployments set different
+  // ones — check all the common variants. The leading lower-case is express's
+  // canonicalization; the headers come in case-insensitively.
+  const h = req.headers;
+  const user = h['x-auth-request-email']
+    || h['x-auth-request-user']
+    || h['x-auth-request-preferred-username']
+    || h['x-forwarded-email']
+    || h['x-forwarded-user']
+    || h['x-forwarded-preferred-username']
+    || null;
+  if (!user) return null;
+  // Trim and normalize. Reject anything obviously weird.
+  const trimmed = String(user).trim().toLowerCase();
+  if (!trimmed || trimmed.length > 256) return null;
+  return trimmed;
+}
+
+// GET /api/progress — return the user's stored state, or {} if none.
+// Returns 401 when not authenticated so the client can fall back to
+// localStorage-only mode silently.
+app.get('/api/progress', (req, res) => {
+  const user = getUser(req);
+  if (!user) return res.status(401).json({ error: 'unauthenticated' });
+  if (!db)   return res.status(503).json({ error: 'progress db unavailable' });
+  try {
+    const row = db.prepare('SELECT data, updated_at FROM progress WHERE user_id = ?').get(user);
+    if (!row) return res.json({ user, data: {}, updated_at: null });
+    let parsed = {};
+    try { parsed = JSON.parse(row.data); } catch { /* corrupted, return empty */ }
+    res.json({ user, data: parsed, updated_at: row.updated_at });
+  } catch (err) {
+    console.error('progress GET failed:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/progress — upsert the user's state.
+// Body: { data: { completed: [...], quizScores: {...}, lastVisited: {...} } }
+app.post('/api/progress', (req, res) => {
+  const user = getUser(req);
+  if (!user) return res.status(401).json({ error: 'unauthenticated' });
+  if (!db)   return res.status(503).json({ error: 'progress db unavailable' });
+  const data = req.body?.data;
+  if (!data || typeof data !== 'object') {
+    return res.status(400).json({ error: 'data object required' });
+  }
+  // Hard cap the payload so a single user can't grow the DB unboundedly.
+  const serialized = JSON.stringify(data);
+  if (serialized.length > 1024 * 1024) {
+    return res.status(413).json({ error: 'data too large (max 1 MB)' });
+  }
+  try {
+    const now = Date.now();
+    db.prepare(`
+      INSERT INTO progress (user_id, data, updated_at) VALUES (?, ?, ?)
+      ON CONFLICT(user_id) DO UPDATE SET data=excluded.data, updated_at=excluded.updated_at
+    `).run(user, serialized, now);
+    res.json({ user, updated_at: now, bytes: serialized.length });
+  } catch (err) {
+    console.error('progress POST failed:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/whoami — diagnostic: returns the detected user, or 401.
+// Useful for debugging the auth-header chain.
+app.get('/api/whoami', (req, res) => {
+  const user = getUser(req);
+  if (!user) return res.status(401).json({ authenticated: false });
+  res.json({ authenticated: true, user });
+});
 
 // Build the system prompt with full app context
 function buildSystemPrompt(appContext) {

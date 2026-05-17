@@ -13,14 +13,21 @@ RUN npm run build
 
 # Stage 2: Run Express server + serve static files
 FROM node:20-slim
-RUN apt-get update && apt-get install -y curl bash && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y curl bash sqlite3 && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
 # Install claude CLI native binary
 RUN curl -fsSL https://claude.ai/install.sh | bash
 ENV PATH="/root/.local/bin:${PATH}"
 
-# Copy package files and install production deps only
+# Persistent data directory for the SQLite progress DB. Mount this as a
+# volume in docker-compose so progress survives container rebuilds.
+RUN mkdir -p /data
+VOLUME /data
+ENV LLMLEARN_DATA_DIR=/data
+
+# Copy package files and install production deps only. better-sqlite3 ships
+# prebuilt linux-x64/arm64 binaries; npm ci picks them up without rebuilding.
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 

@@ -33,6 +33,8 @@ function App() {
   const [quizScores, setQuizScores] = useState(() => readStorage('quiz_scores', {}))
   const [lastVisited, setLastVisited] = useState(() => readStorage('last_visited', null))
   const [currentSection, setCurrentSection] = useState(null)
+  const [syncUser, setSyncUser] = useState(null)
+  const [syncStatus, setSyncStatus] = useState('idle') // idle | syncing | error | offline
 
   // One-time migration: stamp the schema version so future shape changes can
   // diff against it without silently wiping user progress.
@@ -44,6 +46,124 @@ function App() {
       }
     } catch {}
   }, [])
+
+  // -------------------------------------------------------------------------
+  // Cross-device progress sync
+  // -------------------------------------------------------------------------
+  // On mount: GET /api/progress. If authenticated:
+  //   - Server has data → merge into local (union of completed, max-by-ts of
+  //     quizScores, latest of lastVisited). Server wins ties.
+  //   - Server is empty → POST current local snapshot (migration).
+  // If 401 (no auth), stay anonymous — local-only mode.
+  // Then: whenever completed/quizScores/lastVisited change, debounced POST.
+  // -------------------------------------------------------------------------
+  const initialSyncDone = React.useRef(false)
+  const syncTimer = React.useRef(null)
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch('/api/progress', { credentials: 'include' })
+        if (res.status === 401) {
+          if (!cancelled) setSyncStatus('offline')
+          initialSyncDone.current = true
+          return
+        }
+        if (!res.ok) {
+          if (!cancelled) setSyncStatus('error')
+          initialSyncDone.current = true
+          return
+        }
+        const { user, data } = await res.json()
+        if (cancelled) return
+        setSyncUser(user)
+
+        const haveServer = data && Object.keys(data).length > 0
+        if (haveServer) {
+          // Merge: union of completed module IDs.
+          const serverCompleted = Array.isArray(data.completed) ? data.completed : []
+          const merged = Array.from(new Set([...completed, ...serverCompleted]))
+          setCompleted(merged)
+          try { localStorage.setItem('completed', JSON.stringify(merged)) } catch {}
+
+          // Quiz scores: keep higher score per module.
+          if (data.quizScores && typeof data.quizScores === 'object') {
+            const mergedQ = { ...quizScores }
+            for (const [mid, s] of Object.entries(data.quizScores)) {
+              const cur = mergedQ[mid]
+              if (!cur || (s.total > 0 && s.score / s.total > cur.score / cur.total)) {
+                mergedQ[mid] = s
+              }
+            }
+            setQuizScores(mergedQ)
+            try { localStorage.setItem('quiz_scores', JSON.stringify(mergedQ)) } catch {}
+          }
+
+          // Last-visited: latest by timestamp.
+          if (data.lastVisited && data.lastVisited.ts) {
+            const localTs = lastVisited?.ts || 0
+            if (data.lastVisited.ts > localTs) {
+              setLastVisited(data.lastVisited)
+              try { localStorage.setItem('last_visited', JSON.stringify(data.lastVisited)) } catch {}
+            }
+          }
+        } else {
+          // Server empty — push local state up as one-time migration.
+          const snapshot = {
+            completed,
+            quizScores,
+            lastVisited,
+            schema_version: STORAGE_VERSION,
+          }
+          if (snapshot.completed.length > 0 || Object.keys(snapshot.quizScores).length > 0) {
+            await fetch('/api/progress', {
+              method: 'POST',
+              credentials: 'include',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ data: snapshot }),
+            })
+          }
+        }
+        if (!cancelled) setSyncStatus('idle')
+      } catch (err) {
+        if (!cancelled) setSyncStatus('error')
+      } finally {
+        initialSyncDone.current = true
+      }
+    })()
+    return () => { cancelled = true }
+    // run once on mount — completed/quizScores/lastVisited are read inside via
+    // the closure at mount time, which is exactly what we want.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Debounced sync on change. Only writes if we have an authenticated user.
+  useEffect(() => {
+    if (!initialSyncDone.current || !syncUser) return
+    clearTimeout(syncTimer.current)
+    syncTimer.current = setTimeout(async () => {
+      setSyncStatus('syncing')
+      try {
+        const snapshot = {
+          completed,
+          quizScores,
+          lastVisited,
+          schema_version: STORAGE_VERSION,
+        }
+        const res = await fetch('/api/progress', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data: snapshot }),
+        })
+        setSyncStatus(res.ok ? 'idle' : 'error')
+      } catch {
+        setSyncStatus('error')
+      }
+    }, 800)
+    return () => clearTimeout(syncTimer.current)
+  }, [completed, quizScores, lastVisited, syncUser])
 
   // Derive active course from URL
   const activeCourse = useMemo(() => {
@@ -136,6 +256,17 @@ function App() {
       localStorage.removeItem('quiz_scores')
       localStorage.removeItem('last_visited')
     } catch {}
+    // Also push the empty state to the server so the reset propagates to
+    // other devices. Fire-and-forget; the post-change sync effect will also
+    // run, but doing it explicitly here makes the intent clear.
+    if (syncUser) {
+      fetch('/api/progress', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: { completed: [], quizScores: {}, lastVisited: null, schema_version: STORAGE_VERSION } }),
+      }).catch(() => {})
+    }
   }
 
   // Progress for active course or global
@@ -331,6 +462,14 @@ function App() {
               title="Reset all progress"
               aria-label="Reset all progress"
             >Reset</button>
+          </div>
+          <div className="footer-sync" title={syncUser ? `Synced as ${syncUser}` : 'Progress saved locally only (sign in to sync across devices)'}>
+            <span className={`sync-dot sync-${syncStatus} ${syncUser ? 'synced' : 'local'}`} aria-hidden="true" />
+            <span className="sync-label">
+              {syncUser
+                ? (syncStatus === 'syncing' ? 'Syncing…' : syncStatus === 'error' ? 'Sync error' : 'Synced')
+                : 'Local only'}
+            </span>
           </div>
           <div className="footer-meta">
             <span className="footer-build">{__COMMIT_HASH__} · v{__BUILD_NUM__}</span>

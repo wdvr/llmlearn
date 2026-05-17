@@ -8,8 +8,11 @@ services:
     volumes:
       # Mount claude auth from host
       - /home/wouter/.claude:/root/.claude
+      # Persistent progress DB (SQLite). Survives container rebuilds.
+      - /home/wouter/llmlearn-data:/data
     environment:
       - PORT=3001
+      - LLMLEARN_DATA_DIR=/data
     networks:
       - npm
 

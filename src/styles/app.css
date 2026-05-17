@@ -378,10 +378,33 @@ code, pre {
   background: rgba(248, 81, 73, 0.06);
 }
 
+.footer-sync {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 10px;
+  color: var(--text-muted);
+  cursor: help;
+}
+.sync-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+}
+.sync-dot.synced { background: var(--green); box-shadow: 0 0 0 2px rgba(63, 185, 80, 0.15); }
+.sync-dot.local { background: var(--text-muted); opacity: 0.5; }
+.sync-dot.sync-syncing { background: var(--accent); animation: pulse 1s ease-in-out infinite; }
+.sync-dot.sync-error { background: var(--red); box-shadow: 0 0 0 2px rgba(248, 81, 73, 0.15); }
+.sync-label { letter-spacing: 0.3px; }
+@keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.4 } }
+
 .footer-meta {
   display: flex;
   justify-content: space-between;
-  margin-top: 8px;
+  margin-top: 4px;
   font-size: 10px;
   color: var(--text-muted);
   opacity: 0.6;
