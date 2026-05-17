@@ -2,7 +2,7 @@
   "id": "rl-snake",
   "title": "Reinforcement Learning: Train an Agent to Play Snake",
   "description": "An end-to-end RL tutorial: state/action/reward design, Q-learning, the Bellman equation, target networks, replay buffers, and a full PyTorch DQN that learns to play Snake on your laptop in under 30 minutes. The bridge between LLM training and RLHF.",
-  "course": "pytorch-llm",
+  "course": "reinforcement-learning",
   "sections": [
     {
       "title": "Why Snake",

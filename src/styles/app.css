@@ -2065,14 +2065,12 @@ code, pre {
   margin-bottom: 4px;
 }
 
-/* Wider desktops: two-column course cards */
+/* Wider desktops: two-column course cards. With 4 courses the natural
+   layout is a balanced 2×2 grid — the "Start here" badge on the first
+   card carries the recommendation without needing extra width. */
 @media (min-width: 980px) {
   .course-cards {
     grid-template-columns: repeat(2, 1fr);
-  }
-  /* Make the first card span both columns ("Start here" featured) */
-  .course-cards > .course-card:first-child {
-    grid-column: 1 / -1;
   }
 }
 

@@ -165,28 +165,6 @@ export const modules = [
       { id: 'attention-deeper', note: 'The KV cache mechanics in PyTorch — the layer beneath PagedAttention.' },
     ],
   },
-  {
-    id: 'rl-snake',
-    title: 'RL: Train an Agent to Play Snake',
-    description: 'A working end-to-end DQN tutorial. Build a Snake environment, design state/action/reward, implement DQN with replay buffer + target network, train it on your Mac (MPS) or GPU in ~10-30 min. The bridge from supervised learning to RLHF.',
-    sections: [
-      { title: 'Why Snake' },
-      { title: 'RL Vocabulary in 5 Minutes' },
-      { title: 'Game Design: State, Action, Reward' },
-      { title: 'Q-Learning, DQN, and the One Equation You Need' },
-      { title: 'The PyTorch Network' },
-      { title: 'The Training Loop' },
-      { title: 'Mac vs GPU: Which to Train On' },
-      { title: 'Tuning, Failure Modes & What "Solved" Looks Like' },
-      { title: 'Where This Goes Next' },
-    ],
-    loader: () => import('./modules/module11-rl-snake.json'),
-    relatedModules: [
-      { id: 'tensors-devices', note: 'Device-agnostic patterns — the auto-detect (MPS → CUDA → CPU) used in this exercise.' },
-      { id: 'nn-module-training', note: 'The same training-loop skeleton you used for supervised learning, adapted for RL.' },
-      { id: 'mps-apple-gpu-architecture', note: 'Why training Snake DQN on MPS works so well (small model, unified memory).' },
-    ],
-  },
 ]
 
 // Cache for full module content keyed by module id.

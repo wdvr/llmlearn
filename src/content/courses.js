@@ -1,12 +1,15 @@
 import { modules as pytorchModules, loadModule as loadPytorchModule } from './modules'
 import { modules as mpsModules, curatedPRs as mpsCuratedPRs, loadModule as loadMpsModule } from './mps-modules'
 import { modules as cudaModules, loadModule as loadCudaModule } from './cuda-modules'
+import { modules as rlModules, loadModule as loadRlModule } from './rl-modules'
 
 // Recommended order for new learners: CUDA (true GPU foundations) → PyTorch
-// (the LLM framework everyone needs) → Apple MPS (specialization for Mac).
-// The `recommendedLabel` field controls a small badge in the UI on the landing
-// page. CUDA is the headlined "Start here" because the rest of the curriculum
-// only makes sense once you understand what's underneath the framework.
+// (the LLM framework everyone needs) → Apple MPS (specialization for Mac) →
+// RL (a different paradigm; uses PyTorch but conceptually orthogonal). The
+// `recommendedLabel` field controls a small badge in the UI on the landing
+// page. CUDA is the headlined "Start here" because the rest of the
+// curriculum only makes sense once you understand what's underneath the
+// framework.
 export const courses = [
   {
     id: 'cuda-parallel',
@@ -26,12 +29,12 @@ export const courses = [
   {
     id: 'pytorch-llm',
     title: 'PyTorch & LLMs',
-    subtitle: 'Tensors, Transformers, and Training',
-    description: 'Tensors, autograd, attention, transformers, training, modern architectures, MoE/MLA, the full inference stack (vLLM/SGLang/PagedAttention), and an end-to-end RL tutorial — device-agnostic.',
+    subtitle: 'Tensors, Transformers, Training, and Serving',
+    description: 'Tensors, autograd, attention, transformers, training, modern architectures, MoE/MLA, and the full inference stack (vLLM/SGLang/PagedAttention) — device-agnostic.',
     icon: '🔥',
     color: '#58a6ff',
     level: 'Beginner → Advanced',
-    hours: '18–24h',
+    hours: '16–22h',
     order: 2,
     recommendedLabel: 'Then build LLMs',
     modules: pytorchModules,
@@ -53,6 +56,21 @@ export const courses = [
     curatedPRs: mpsCuratedPRs,
     exerciseRuntime: 'local',
   },
+  {
+    id: 'reinforcement-learning',
+    title: 'Reinforcement Learning',
+    subtitle: 'From Snake to RLHF',
+    description: 'A different paradigm: instead of fitting labels, learn from a reward signal. Starts hands-on with DQN on Snake, then climbs the ladder to policy gradients (PPO), RLHF (the technique behind ChatGPT), and DPO (its closed-form alternative). Uses PyTorch but the conceptual core is its own field.',
+    icon: '🎮',
+    color: '#f0883e',
+    level: 'Intermediate',
+    hours: '3–6h',
+    order: 4,
+    recommendedLabel: 'A different paradigm',
+    modules: rlModules,
+    curatedPRs: [],
+    exerciseRuntime: 'local',
+  },
 ]
 
 // Flat helpers for backward compat and route lookup. These operate on the
@@ -68,7 +86,8 @@ export async function loadModule(id) {
   return (
     (await loadPytorchModule(id)) ||
     (await loadMpsModule(id)) ||
-    (await loadCudaModule(id))
+    (await loadCudaModule(id)) ||
+    (await loadRlModule(id))
   )
 }
 
