@@ -43,7 +43,12 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] Rebuilding ${DEPLOYED:0:7} -> ${LOCAL:0:7}"
 # Pass git info as build args so the frontend shows the correct version
 HASH=$(git rev-parse --short HEAD)
 NUM=$(git rev-list --count HEAD)
-COMMIT_HASH=$HASH BUILD_NUM=$NUM docker compose build --build-arg COMMIT_HASH=$HASH --build-arg BUILD_NUM=$NUM >> "$LOG" 2>&1
+COMMIT_HASH=$HASH BUILD_NUM=$NUM docker compose build \
+  --build-arg COMMIT_HASH=$HASH --build-arg BUILD_NUM=$NUM >> "$LOG" 2>&1
+
+# Use down+up instead of just up (which races during recreate, leaving
+# orphan containers like `<hash>_llmlearn`).
+docker compose down --remove-orphans >> "$LOG" 2>&1 || true
 docker compose up -d >> "$LOG" 2>&1
 docker image prune -f >> "$LOG" 2>&1
 
