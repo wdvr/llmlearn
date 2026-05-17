@@ -153,6 +153,7 @@ export const modules = [
       { title: 'Continuous Batching — The Orca Insight' },
       { title: 'PagedAttention — The Real Contribution of vLLM' },
       { title: 'vLLM vs SGLang vs TGI vs TensorRT-LLM' },
+      { title: 'Hands-On: Deploy vLLM in Docker' },
       { title: 'Speculative Decoding — Cheating the Memory Wall' },
       { title: 'Quantization — The Other Multiplier' },
       { title: 'The Full 2026 Inference Stack' },
