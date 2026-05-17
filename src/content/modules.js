@@ -142,6 +142,50 @@ export const modules = [
       { id: 'cuda-tensor-cores', note: 'Tensor Cores at the FFN core of every MoE expert.' },
     ],
   },
+  {
+    id: 'inference-batching-vllm',
+    title: 'LLM Inference: Batching, KV Cache, vLLM vs SGLang',
+    description: 'How LLM inference actually scales. KV cache memory math, prefill vs decode, continuous batching, PagedAttention, vLLM vs SGLang vs TGI vs TensorRT-LLM, speculative decoding, FP8 quantization, and the full 2026 inference stack.',
+    sections: [
+      { title: 'Why Inference Is the Bottleneck' },
+      { title: 'The KV Cache — Why It Exists and What It Costs' },
+      { title: 'Static Batching and Why It Falls Apart' },
+      { title: 'Continuous Batching — The Orca Insight' },
+      { title: 'PagedAttention — The Real Contribution of vLLM' },
+      { title: 'vLLM vs SGLang vs TGI vs TensorRT-LLM' },
+      { title: 'Speculative Decoding — Cheating the Memory Wall' },
+      { title: 'Quantization — The Other Multiplier' },
+      { title: 'The Full 2026 Inference Stack' },
+    ],
+    loader: () => import('./modules/module10-inference.json'),
+    relatedModules: [
+      { id: 'cuda-streams-graphs', note: 'CUDA Graphs — the per-token launch-overhead killer used by every serving engine.' },
+      { id: 'cuda-mixed-precision', note: 'FP8 / INT4 quantization fundamentals, applied to inference.' },
+      { id: 'attention-deeper', note: 'The KV cache mechanics in PyTorch — the layer beneath PagedAttention.' },
+    ],
+  },
+  {
+    id: 'rl-snake',
+    title: 'RL: Train an Agent to Play Snake',
+    description: 'A working end-to-end DQN tutorial. Build a Snake environment, design state/action/reward, implement DQN with replay buffer + target network, train it on your Mac (MPS) or GPU in ~10-30 min. The bridge from supervised learning to RLHF.',
+    sections: [
+      { title: 'Why Snake' },
+      { title: 'RL Vocabulary in 5 Minutes' },
+      { title: 'Game Design: State, Action, Reward' },
+      { title: 'Q-Learning, DQN, and the One Equation You Need' },
+      { title: 'The PyTorch Network' },
+      { title: 'The Training Loop' },
+      { title: 'Mac vs GPU: Which to Train On' },
+      { title: 'Tuning, Failure Modes & What "Solved" Looks Like' },
+      { title: 'Where This Goes Next' },
+    ],
+    loader: () => import('./modules/module11-rl-snake.json'),
+    relatedModules: [
+      { id: 'tensors-devices', note: 'Device-agnostic patterns — the auto-detect (MPS → CUDA → CPU) used in this exercise.' },
+      { id: 'nn-module-training', note: 'The same training-loop skeleton you used for supervised learning, adapted for RL.' },
+      { id: 'mps-apple-gpu-architecture', note: 'Why training Snake DQN on MPS works so well (small model, unified memory).' },
+    ],
+  },
 ]
 
 // Cache for full module content keyed by module id.
