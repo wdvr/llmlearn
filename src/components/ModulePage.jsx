@@ -391,7 +391,10 @@ function inlineMarkdown(text, linkifiedSlugs) {
     const bold = rest.match(/\*\*(.+?)\*\*/);
     const code = rest.match(/`([^`]+)`/);
     const link = rest.match(/\[([^\]]+)\]\(([^)]+)\)/);
-    const candidates = [bold, code, link].filter(Boolean);
+    // Italic: single * not adjacent to another *, with non-whitespace
+    // content (so we don't pick up bullet-list star characters).
+    const italic = rest.match(/(?<!\*)\*(?!\*|\s)([^*\n]+?)(?<!\s|\*)\*(?!\*)/);
+    const candidates = [bold, code, link, italic].filter(Boolean);
     if (!candidates.length) { tokens.push(rest); break; }
 
     const next = candidates.sort((a, b) => a.index - b.index)[0];
@@ -426,6 +429,8 @@ function inlineMarkdown(text, linkifiedSlugs) {
           {link[1]}
         </a>
       );
+    } else if (next === italic) {
+      tokens.push(<em key={key++}>{italic[1]}</em>);
     }
     rest = rest.slice(next.index + next[0].length);
   }

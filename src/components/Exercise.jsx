@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import CodeBlock from './CodeBlock'
+import { inlineMd } from './inlineMd'
 
 export default function Exercise({ exercise }) {
   const [code, setCode] = useState(exercise.starterCode)
@@ -508,12 +509,7 @@ _final_stderr = _stderr_buffer.getvalue()
     <div className="exercise-section">
       <h3>🔨 Exercise: {exercise.title}</h3>
       <div className="exercise-desc">
-        {exercise.description.split('\n').map((line, i) => (
-          <React.Fragment key={i}>
-            {line}
-            <br />
-          </React.Fragment>
-        ))}
+        {inlineMd(exercise.description)}
       </div>
 
       <div className="exercise-editor">

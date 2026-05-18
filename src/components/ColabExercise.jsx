@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { inlineMd } from './inlineMd'
 
 export default function ColabExercise({ exercise }) {
   const [showSolution, setShowSolution] = useState(false)
@@ -9,7 +10,7 @@ export default function ColabExercise({ exercise }) {
     <div className="exercise-section">
       <h3>Exercise: {exercise.title}</h3>
       <div className="exercise-description" style={{ marginBottom: '16px', lineHeight: 1.7 }}>
-        {exercise.description}
+        {inlineMd(exercise.description)}
       </div>
 
       {exercise.starterCode && (
