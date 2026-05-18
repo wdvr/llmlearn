@@ -14,6 +14,7 @@ import LocalExercise from './LocalExercise'
 import CodeBlock from './CodeBlock'
 import * as CudaDiagrams from './CudaDiagrams'
 import { findModuleCourse, findModule, loadModule } from '../content/courses'
+import { glossaryByTerm } from '../content/glossary'
 
 SyntaxHighlighter.registerLanguage('python', python)
 SyntaxHighlighter.registerLanguage('cpp', cpp)
@@ -122,8 +123,77 @@ function PermalinkIcon({ slug }) {
   )
 }
 
-// Render markdown-ish content: fenced code blocks, **bold**, `code`, [text](url), lists, tables
-function renderMarkdown(text) {
+// Resume-reading banner shown when the user returns to a module where they
+// previously had a scroll position bookmarked. Three actions:
+//   - Resume: smooth-scroll to the saved offset.
+//   - Start over: do nothing (banner already-dismissed, page already at top).
+//   - Clear bookmark: explicitly remove the saved position so it doesn't
+//     resurface on this device or others (sync drops it next tick).
+function ResumeBanner({ bookmark, onResume, onDismiss, onClear }) {
+  const ts = bookmark?.ts
+  const section = bookmark?.sectionTitle
+  const ago = ts ? humanAgo(Date.now() - ts) : ''
+  return (
+    <div className="resume-banner" role="status" aria-label="Bookmark from previous visit">
+      <div className="resume-banner-icon" aria-hidden="true">📍</div>
+      <div className="resume-banner-text">
+        <strong>Pick up where you left off</strong>
+        <div className="resume-banner-meta">
+          {section ? <>at <em>{section}</em></> : 'at your last scroll position'}
+          {ago && <> · {ago}</>}
+        </div>
+      </div>
+      <div className="resume-banner-actions">
+        <button type="button" className="btn btn-primary btn-sm" onClick={onResume}>
+          Resume →
+        </button>
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm"
+          onClick={onDismiss}
+          title="Start reading from the top; the bookmark is kept for next time"
+        >
+          Start over
+        </button>
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm resume-banner-clear"
+          onClick={onClear}
+          title="Forget this bookmark"
+          aria-label="Forget bookmark"
+        >×</button>
+      </div>
+    </div>
+  )
+}
+
+function humanAgo(ms) {
+  if (ms < 60_000) return 'moments ago'
+  const min = Math.floor(ms / 60_000)
+  if (min < 60) return `${min} min ago`
+  const hr = Math.floor(min / 60)
+  if (hr < 24) return `${hr} h ago`
+  const day = Math.floor(hr / 24)
+  if (day < 30) return `${day} day${day === 1 ? '' : 's'} ago`
+  const mo = Math.floor(day / 30)
+  return `${mo} mo ago`
+}
+
+// Look up a `**bold**` inner string in the curated glossary. Case-insensitive,
+// trims surrounding whitespace and a trailing colon/period (so "**KV cache:**"
+// still matches the "KV cache" entry). Returns the glossary entry or null.
+function lookupGlossaryTerm(inner) {
+  if (!inner) return null
+  const key = String(inner).toLowerCase().trim().replace(/[:.]+$/, '')
+  // Multi-word entries with extra punctuation inside are rare; one direct hit is enough.
+  return glossaryByTerm.get(key) || null
+}
+
+// Render markdown-ish content: fenced code blocks, **bold**, `code`, [text](url), lists, tables.
+// `linkifiedSlugs` is a Set used to ensure we only auto-link the FIRST occurrence
+// of each glossary term per render pass (typically per section). Callers that
+// don't care about linkification can pass undefined.
+function renderMarkdown(text, linkifiedSlugs) {
   // Tokenize fences while preserving language tags. Each fenced block becomes
   // {lang, body}; surrounding prose stays as plain strings.
   const tokens = [];
@@ -196,7 +266,7 @@ function renderMarkdown(text) {
                 <tr style={{ borderBottom: '1px solid var(--border)' }}>
                   {header.map((h, k) => (
                     <th key={k} style={{ textAlign: 'left', padding: '6px 10px', color: 'var(--text-muted)', fontWeight: 600 }}>
-                      {inlineMarkdown(h)}
+                      {inlineMarkdown(h, linkifiedSlugs)}
                     </th>
                   ))}
                 </tr>
@@ -206,7 +276,7 @@ function renderMarkdown(text) {
                   <tr key={ri} style={{ borderBottom: '1px solid var(--bg-tertiary)' }}>
                     {row.map((cell, ci) => (
                       <td key={ci} style={{ padding: '6px 10px', fontSize: '13px' }}>
-                        {inlineMarkdown(cell)}
+                        {inlineMarkdown(cell, linkifiedSlugs)}
                       </td>
                     ))}
                   </tr>
@@ -226,7 +296,7 @@ function renderMarkdown(text) {
             background: 'var(--bg-tertiary)', borderRadius: '0 6px 6px 0', fontStyle: 'italic',
             color: 'var(--text-muted)', lineHeight: '1.65'
           }}>
-            {inlineMarkdown(quoteText)}
+            {inlineMarkdown(quoteText, linkifiedSlugs)}
           </blockquote>
         );
       }
@@ -238,7 +308,7 @@ function renderMarkdown(text) {
           <ul key={`${i}-${j}`} style={{ margin: '8px 0 8px 20px', listStyle: 'disc' }}>
             {lines.filter(l => l.trim()).map((l, k) => (
               <li key={k} style={{ marginBottom: '4px', fontSize: '15px', lineHeight: '1.65' }}>
-                {inlineMarkdown(l.replace(/^\s*-\s+/, ''))}
+                {inlineMarkdown(l.replace(/^\s*-\s+/, ''), linkifiedSlugs)}
               </li>
             ))}
           </ul>
@@ -251,7 +321,7 @@ function renderMarkdown(text) {
           <ol key={`${i}-${j}`} style={{ margin: '8px 0 8px 20px' }}>
             {lines.filter(l => l.trim()).map((l, k) => (
               <li key={k} style={{ marginBottom: '4px', fontSize: '15px', lineHeight: '1.65' }}>
-                {inlineMarkdown(l.replace(/^\s*\d+\.\s+/, ''))}
+                {inlineMarkdown(l.replace(/^\s*\d+\.\s+/, ''), linkifiedSlugs)}
               </li>
             ))}
           </ol>
@@ -271,7 +341,7 @@ function renderMarkdown(text) {
         };
         const Tag = `h${Math.min(level + 2, 6)}`; // offset since section already uses h3
         const subSlug = slugify(text);
-        return <Tag key={`${i}-${j}`} id={subSlug} style={{...styles[level] || styles[4], scrollMarginTop: '20px'}} className="heading-with-permalink">{inlineMarkdown(text)}<PermalinkIcon slug={subSlug} /></Tag>;
+        return <Tag key={`${i}-${j}`} id={subSlug} style={{...styles[level] || styles[4], scrollMarginTop: '20px'}} className="heading-with-permalink">{inlineMarkdown(text, linkifiedSlugs)}<PermalinkIcon slug={subSlug} /></Tag>;
       }
 
       // Check for block with mixed content (headers + paragraphs in same block)
@@ -289,10 +359,10 @@ function renderMarkdown(text) {
                   4: { fontSize: '14px', fontWeight: 600, marginTop: '16px', marginBottom: '8px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' },
                 };
                 const Tag = `h${Math.min(lvl + 2, 6)}`;
-                return <Tag key={k} style={styles[lvl] || styles[4]}>{inlineMarkdown(hm[2])}</Tag>;
+                return <Tag key={k} style={styles[lvl] || styles[4]}>{inlineMarkdown(hm[2], linkifiedSlugs)}</Tag>;
               }
               if (line.trim()) {
-                return <p key={k} style={{ marginBottom: '8px', lineHeight: '1.75' }}>{inlineMarkdown(line)}</p>;
+                return <p key={k} style={{ marginBottom: '8px', lineHeight: '1.75' }}>{inlineMarkdown(line, linkifiedSlugs)}</p>;
               }
               return null;
             })}
@@ -301,13 +371,17 @@ function renderMarkdown(text) {
       }
 
       // Regular paragraph — handle embedded list items with \n-
-      return <p key={`${i}-${j}`} style={{ marginBottom: '12px', lineHeight: '1.75' }}>{inlineMarkdown(trimmed.replace(/\n/g, ' '))}</p>;
+      return <p key={`${i}-${j}`} style={{ marginBottom: '12px', lineHeight: '1.75' }}>{inlineMarkdown(trimmed.replace(/\n/g, ' '), linkifiedSlugs)}</p>;
     });
   });
 }
 
-// Handle inline formatting: **bold**, `code`, [text](url)
-function inlineMarkdown(text) {
+// Handle inline formatting: **bold**, `code`, [text](url).
+// `linkifiedSlugs` is an optional Set tracking which glossary slugs have
+// already been auto-linked in this render pass — we only linkify the FIRST
+// occurrence of each term per pass so e.g. a CUDA module doesn't turn every
+// **kernel** into a link.
+function inlineMarkdown(text, linkifiedSlugs) {
   if (!text) return text;
   const tokens = [];
   let rest = text;
@@ -324,7 +398,23 @@ function inlineMarkdown(text) {
     if (next.index > 0) tokens.push(rest.slice(0, next.index));
 
     if (next === bold) {
-      tokens.push(<strong key={key++} style={{ color: 'var(--accent)', fontWeight: 600 }}>{bold[1]}</strong>);
+      const inner = bold[1];
+      const entry = lookupGlossaryTerm(inner);
+      if (entry && linkifiedSlugs && !linkifiedSlugs.has(entry.slug)) {
+        linkifiedSlugs.add(entry.slug);
+        // Use a hash-router-safe href: /#/glossary#<slug>. The Glossary page
+        // parses the slug from the raw URL on mount and scrolls to it.
+        tokens.push(
+          <a
+            key={key++}
+            href={`#/glossary#${entry.slug}`}
+            className="glossary-link"
+            title={entry.definition}
+          >{inner}</a>
+        );
+      } else {
+        tokens.push(<strong key={key++} style={{ color: 'var(--accent)', fontWeight: 600 }}>{inner}</strong>);
+      }
     } else if (next === code) {
       tokens.push(<code key={key++} style={{
         background: 'var(--bg-tertiary)', padding: '1px 5px', borderRadius: '3px', fontSize: '13px', fontFamily: "'JetBrains Mono', monospace"
@@ -342,7 +432,17 @@ function inlineMarkdown(text) {
   return tokens;
 }
 
-export default function ModulePage({ modules, completed, onComplete, onUncomplete, onQuizScore, onSectionChange }) {
+export default function ModulePage({
+  modules,
+  completed,
+  onComplete,
+  onUncomplete,
+  onQuizScore,
+  onSectionChange,
+  scrollPositions = {},
+  onSaveScrollPosition,
+  onClearScrollPosition,
+}) {
   const { id } = useParams()
 
   // Scope navigation to the module's course (manifest data only).
@@ -356,6 +456,12 @@ export default function ModulePage({ modules, completed, onComplete, onUncomplet
   // Full module content (sections.content, quiz, exercise) is dynamic-imported on demand.
   const [fullModule, setFullModule] = useState(null)
   const [loadError, setLoadError] = useState(null)
+
+  // Bookmark UX state: the saved position for THIS module (captured at mount
+  // before any scroll handlers fire), and whether the banner is dismissed.
+  const initialBookmark = useRef(null)
+  const [showResumeBanner, setShowResumeBanner] = useState(false)
+  const currentSectionRef = useRef(null)
 
   useEffect(() => {
     let cancelled = false
@@ -375,9 +481,42 @@ export default function ModulePage({ modules, completed, onComplete, onUncomplet
   // Use full content once loaded, fall back to manifest while pending.
   const module = fullModule || manifestModule
 
+  // On every module change, scroll to top and capture the existing bookmark
+  // (if any) so we can offer a "Resume from §X" affordance. We deliberately
+  // start at the top — users find it disorienting to land mid-page.
   useEffect(() => {
     window.scrollTo(0, 0)
+    const saved = scrollPositions?.[id]
+    if (saved && typeof saved.scroll === 'number' && saved.scroll > 200) {
+      initialBookmark.current = saved
+      setShowResumeBanner(true)
+    } else {
+      initialBookmark.current = null
+      setShowResumeBanner(false)
+    }
+    // We intentionally don't depend on scrollPositions — only re-capture on
+    // module change. Subsequent saves shouldn't re-show the banner.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
+
+  // Save scroll position as the user reads. Debounced — fires at most every
+  // 500ms while scrolling, plus one trailing save after they stop.
+  useEffect(() => {
+    if (!fullModule || !onSaveScrollPosition) return
+    let timer = null
+    const handleScroll = () => {
+      clearTimeout(timer)
+      timer = setTimeout(() => {
+        const y = window.scrollY || document.documentElement.scrollTop || 0
+        onSaveScrollPosition(id, y, currentSectionRef.current)
+      }, 500)
+    }
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => {
+      window.removeEventListener('scroll', handleScroll)
+      clearTimeout(timer)
+    }
+  }, [id, fullModule, onSaveScrollPosition])
 
   // Track which section is visible via IntersectionObserver
   useEffect(() => {
@@ -388,8 +527,14 @@ export default function ModulePage({ modules, completed, onComplete, onUncomplet
     const observer = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
-          if (entry.isIntersecting && onSectionChange) {
-            onSectionChange(entry.target.textContent)
+          if (entry.isIntersecting) {
+            // The h3 contains the section title text followed by the
+            // PermalinkIcon (🔗 / ✓). Strip those so the bookmark and
+            // the sidebar both show the clean title.
+            const raw = entry.target.textContent || ''
+            const title = raw.replace(/[🔗✓]\s*$/u, '').trim()
+            currentSectionRef.current = title
+            if (onSectionChange) onSectionChange(title)
           }
         }
       },
@@ -398,8 +543,9 @@ export default function ModulePage({ modules, completed, onComplete, onUncomplet
 
     sections.forEach(el => observer.observe(el))
     // Set initial section
-    if (onSectionChange && fullModule.sections?.[0]) {
-      onSectionChange(fullModule.sections[0].title)
+    if (fullModule.sections?.[0]) {
+      currentSectionRef.current = fullModule.sections[0].title
+      if (onSectionChange) onSectionChange(fullModule.sections[0].title)
     }
 
     return () => observer.disconnect()
@@ -445,6 +591,21 @@ export default function ModulePage({ modules, completed, onComplete, onUncomplet
         <p>{module.description}</p>
       </div>
 
+      {showResumeBanner && initialBookmark.current && (
+        <ResumeBanner
+          bookmark={initialBookmark.current}
+          onResume={() => {
+            window.scrollTo({ top: initialBookmark.current.scroll, behavior: 'smooth' })
+            setShowResumeBanner(false)
+          }}
+          onDismiss={() => setShowResumeBanner(false)}
+          onClear={() => {
+            onClearScrollPosition?.(id)
+            setShowResumeBanner(false)
+          }}
+        />
+      )}
+
       {module.sections.map((section, i) => {
         const slug = slugify(section.title)
         return (
@@ -454,7 +615,7 @@ export default function ModulePage({ modules, completed, onComplete, onUncomplet
             <PermalinkIcon slug={slug} />
           </h3>
           <div className="section-content">
-            {renderMarkdown(section.content)}
+            {renderMarkdown(section.content, new Set())}
           </div>
           {section.code && <CodeBlock code={section.code} />}
           {section.references && section.references.length > 0 && (
@@ -543,13 +704,19 @@ export default function ModulePage({ modules, completed, onComplete, onUncomplet
         ) : <div />}
 
         {completed.includes(module.id) ? (
-          <button
-            className="btn btn-success"
-            onClick={() => onUncomplete?.(module.id)}
-            title="Click to mark as incomplete"
-          >
-            ✓ Completed
-          </button>
+          <div className="complete-cluster">
+            <span className="btn btn-success btn-static" aria-label="Module completed">
+              ✓ Completed
+            </span>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm complete-undo"
+              onClick={() => onUncomplete?.(module.id)}
+              title="Re-add this module to your to-do list"
+            >
+              Mark as not read
+            </button>
+          </div>
         ) : (
           <button
             className="btn btn-primary"

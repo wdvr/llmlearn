@@ -6,6 +6,7 @@ const ModulePage = React.lazy(() => import('./components/ModulePage'))
 const PRReview = React.lazy(() => import('./components/PRReview'))
 const ClaudeChat = React.lazy(() => import('./components/ClaudeChat'))
 const Scratch = React.lazy(() => import('./components/Scratch'))
+const Glossary = React.lazy(() => import('./components/Glossary'))
 
 const RouteFallback = () => (
   <div className="content"><p>Loading...</p></div>
@@ -32,6 +33,7 @@ function App() {
   })
   const [quizScores, setQuizScores] = useState(() => readStorage('quiz_scores', {}))
   const [lastVisited, setLastVisited] = useState(() => readStorage('last_visited', null))
+  const [scrollPositions, setScrollPositions] = useState(() => readStorage('scroll_positions', {}))
   const [currentSection, setCurrentSection] = useState(null)
   const [syncUser, setSyncUser] = useState(null)
   const [syncStatus, setSyncStatus] = useState('idle') // idle | syncing | error | offline
@@ -108,15 +110,30 @@ function App() {
               try { localStorage.setItem('last_visited', JSON.stringify(data.lastVisited)) } catch {}
             }
           }
+
+          // Scroll positions: per-module latest-ts wins.
+          if (data.scrollPositions && typeof data.scrollPositions === 'object') {
+            const mergedPos = { ...scrollPositions }
+            for (const [mid, pos] of Object.entries(data.scrollPositions)) {
+              if (!pos || typeof pos.ts !== 'number') continue
+              const cur = mergedPos[mid]
+              if (!cur || pos.ts > (cur.ts || 0)) {
+                mergedPos[mid] = pos
+              }
+            }
+            setScrollPositions(mergedPos)
+            try { localStorage.setItem('scroll_positions', JSON.stringify(mergedPos)) } catch {}
+          }
         } else {
           // Server empty — push local state up as one-time migration.
           const snapshot = {
             completed,
             quizScores,
             lastVisited,
+            scrollPositions,
             schema_version: STORAGE_VERSION,
           }
-          if (snapshot.completed.length > 0 || Object.keys(snapshot.quizScores).length > 0) {
+          if (snapshot.completed.length > 0 || Object.keys(snapshot.quizScores).length > 0 || Object.keys(snapshot.scrollPositions).length > 0) {
             await fetch('/api/progress', {
               method: 'POST',
               credentials: 'include',
@@ -149,6 +166,7 @@ function App() {
           completed,
           quizScores,
           lastVisited,
+          scrollPositions,
           schema_version: STORAGE_VERSION,
         }
         const res = await fetch('/api/progress', {
@@ -163,7 +181,7 @@ function App() {
       }
     }, 800)
     return () => clearTimeout(syncTimer.current)
-  }, [completed, quizScores, lastVisited, syncUser])
+  }, [completed, quizScores, lastVisited, scrollPositions, syncUser])
 
   // Derive active course from URL
   const activeCourse = useMemo(() => {
@@ -219,6 +237,10 @@ function App() {
   }, [completed])
 
   useEffect(() => {
+    try { localStorage.setItem('scroll_positions', JSON.stringify(scrollPositions)) } catch {}
+  }, [scrollPositions])
+
+  useEffect(() => {
     document.documentElement.style.setProperty('--font-size', `${fontSize}px`)
     document.documentElement.style.setProperty('--font-size-code', `${fontSize - 2}px`)
     localStorage.setItem('font_size', fontSize.toString())
@@ -246,15 +268,43 @@ function App() {
     setCompleted(completed.filter(id => id !== moduleId))
   }
 
+  // Save the user's current scroll position for a module. Called from ModulePage
+  // on debounced scroll. Skipped when the position is near the top of the page
+  // — no need to clutter sync with "you started reading" entries.
+  const saveScrollPosition = (moduleId, scroll, sectionTitle) => {
+    if (!moduleId) return
+    if (scroll < 200) {
+      // Below threshold: don't save. If a bookmark already exists, leave it
+      // alone — the user might have come back and scrolled to the top briefly.
+      return
+    }
+    setScrollPositions(prev => ({
+      ...prev,
+      [moduleId]: { scroll: Math.round(scroll), sectionTitle: sectionTitle || null, ts: Date.now() },
+    }))
+  }
+
+  const clearScrollPosition = (moduleId) => {
+    if (!moduleId) return
+    setScrollPositions(prev => {
+      if (!(moduleId in prev)) return prev
+      const next = { ...prev }
+      delete next[moduleId]
+      return next
+    })
+  }
+
   const resetProgress = () => {
-    if (!confirm('Reset all course progress? This clears completed modules and quiz scores. This cannot be undone.')) return
+    if (!confirm('Reset all course progress? This clears completed modules, quiz scores, and bookmarks. This cannot be undone.')) return
     setCompleted([])
     setQuizScores({})
     setLastVisited(null)
+    setScrollPositions({})
     try {
       localStorage.removeItem('completed')
       localStorage.removeItem('quiz_scores')
       localStorage.removeItem('last_visited')
+      localStorage.removeItem('scroll_positions')
     } catch {}
     // Also push the empty state to the server so the reset propagates to
     // other devices. Fire-and-forget; the post-change sync effect will also
@@ -264,7 +314,7 @@ function App() {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ data: { completed: [], quizScores: {}, lastVisited: null, schema_version: STORAGE_VERSION } }),
+        body: JSON.stringify({ data: { completed: [], quizScores: {}, lastVisited: null, scrollPositions: {}, schema_version: STORAGE_VERSION } }),
       }).catch(() => {})
     }
   }
@@ -373,6 +423,13 @@ function App() {
                 <span className="nav-dot" />
                 <span>Python Scratchpad</span>
               </Link>
+              <Link
+                to="/glossary"
+                className={`nav-item ${location.pathname.startsWith('/glossary') ? 'active' : ''}`}
+              >
+                <span className="nav-dot" />
+                <span>Glossary</span>
+              </Link>
               {activeCourse.curatedPRs && activeCourse.curatedPRs.length > 0 && (
                 <Link
                   to="/prs"
@@ -416,6 +473,13 @@ function App() {
               >
                 <span className="nav-dot" />
                 <span>Python Scratchpad</span>
+              </Link>
+              <Link
+                to="/glossary"
+                className={`nav-item ${location.pathname.startsWith('/glossary') ? 'active' : ''}`}
+              >
+                <span className="nav-dot" />
+                <span>Glossary</span>
               </Link>
               {anyCuratedPRs && (
                 <Link
@@ -523,6 +587,9 @@ function App() {
                     }
                   }}
                   onSectionChange={setCurrentSection}
+                  scrollPositions={scrollPositions}
+                  onSaveScrollPosition={saveScrollPosition}
+                  onClearScrollPosition={clearScrollPosition}
                 />
               }
             />
@@ -531,6 +598,7 @@ function App() {
               element={<PRReview courses={courses} />}
             />
             <Route path="/scratch" element={<Scratch />} />
+            <Route path="/glossary" element={<Glossary />} />
           </Routes>
         </Suspense>
       </main>
@@ -619,6 +687,17 @@ function LandingPage({ courses, completed, lastVisited }) {
           </div>
         </div>
         <div className="scratch-card-cta">Open →</div>
+      </Link>
+
+      <Link to="/glossary" className="scratch-card glossary-card">
+        <div className="scratch-card-icon" aria-hidden="true">📖</div>
+        <div className="scratch-card-text">
+          <div className="scratch-card-title">Glossary</div>
+          <div className="scratch-card-desc">
+            ~150 key technical terms used across the courses — quick definitions and links to canonical sources.
+          </div>
+        </div>
+        <div className="scratch-card-cta">Browse →</div>
       </Link>
 
       <h3 className="section-heading">Courses</h3>
