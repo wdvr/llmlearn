@@ -94,6 +94,25 @@ export const modules = [
       { id: 'mps-mlx-framework', note: 'MLX\'s lazy graph + native fast.scaled_dot_product_attention.' },
     ],
   },
+  {
+    id: 'mps-quantization',
+    title: 'Quantization on Apple Silicon — GGUF, MLX 4-bit, AWQ',
+    description: 'Why running a 70B model on a Mac means quantizing it. The format zoo (GGUF Q4_K_M, AWQ, GPTQ, MLX 4-bit), what each one trades off, and how to actually load and run a quantized Llama on Apple Silicon.',
+    sections: [
+      { title: 'Why Quantization Is Non-Negotiable on a Mac' },
+      { title: 'Formats: GGUF, AWQ, GPTQ, MLX-Quant' },
+      { title: 'How K-Quants Actually Work' },
+      { title: 'Hands-On: Run a Quantized Llama on Mac' },
+      { title: 'Performance & Quality — What to Expect' },
+      { title: 'Pitfalls and Tips' },
+    ],
+    loader: () => import('./mps-modules/mps07-quantization-on-mps.json'),
+    relatedModules: [
+      { id: 'cuda-mixed-precision', note: 'FP16 / BF16 / FP8 fundamentals — same numerics, different runtimes.' },
+      { id: 'inference-batching-vllm', note: 'Quantization as part of the full inference stack on CUDA.' },
+      { id: 'mps-mlx-framework', note: 'MLX\'s native 4-bit + the mlx-community model zoo.' },
+    ],
+  },
 ]
 
 // Cache for full module content keyed by module id.

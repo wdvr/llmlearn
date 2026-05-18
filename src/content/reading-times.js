@@ -28,6 +28,7 @@ export const readingTimes = {
   'mps-flash-attention': 13,
   'mps-metal-shaders': 27,
   'mps-mlx-framework': 24,
+  'mps-quantization': 15,
   'mps-tensor-fundamentals': 19,
   'nn-module-training': 43,
   'qkv-deep-dive': 26,
