@@ -12,7 +12,58 @@ import Exercise from './Exercise'
 import ColabExercise from './ColabExercise'
 import LocalExercise from './LocalExercise'
 import CodeBlock from './CodeBlock'
-import * as CudaDiagrams from './CudaDiagrams'
+// CudaDiagrams.jsx is 2.5k lines of inline SVG components used only by
+// the CUDA course. We avoid bundling it into the ModulePage chunk (which
+// PyTorch/MPS/RL users would also pay for) by dynamic-importing on first
+// use. The promise is cached at module scope so subsequent diagram renders
+// across navigations don't refetch.
+let cudaDiagramsPromise = null
+let cudaDiagramsModule = null
+function loadCudaDiagrams() {
+  if (cudaDiagramsModule) return Promise.resolve(cudaDiagramsModule)
+  if (!cudaDiagramsPromise) {
+    cudaDiagramsPromise = import('./CudaDiagrams').then(m => {
+      cudaDiagramsModule = m
+      return m
+    })
+  }
+  return cudaDiagramsPromise
+}
+
+function CudaDiagram({ name }) {
+  const initial = cudaDiagramsModule ? cudaDiagramsModule[name] : null
+  const [Cmp, setCmp] = useState(() => initial)
+  const [loaded, setLoaded] = useState(!!cudaDiagramsModule)
+  useEffect(() => {
+    if (cudaDiagramsModule) {
+      setCmp(() => cudaDiagramsModule[name] || null)
+      setLoaded(true)
+      return
+    }
+    let cancelled = false
+    loadCudaDiagrams().then(m => {
+      if (cancelled) return
+      setCmp(() => m[name] || null)
+      setLoaded(true)
+    }).catch(() => { if (!cancelled) setLoaded(true) })
+    return () => { cancelled = true }
+  }, [name])
+  if (!loaded) {
+    return (
+      <div style={{ margin: '16px 0', padding: '16px', background: 'var(--bg-tertiary)', borderRadius: '8px', color: 'var(--text-muted)', fontSize: '13px', textAlign: 'center' }}>
+        Loading diagram…
+      </div>
+    )
+  }
+  if (!Cmp) {
+    return (
+      <div style={{ margin: '12px 0', padding: '12px', background: 'var(--bg-tertiary)', borderRadius: '6px', color: '#f85149', fontSize: '13px' }}>
+        Unknown diagram: <code>{name}</code>
+      </div>
+    )
+  }
+  return <Cmp />
+}
 import { findModuleCourse, findModule, loadModule } from '../content/courses'
 import { glossaryByTerm } from '../content/glossary'
 import { readingTimeFor } from '../content/reading-times'
@@ -269,12 +320,12 @@ function renderMarkdown(text, linkifiedSlugs) {
       if (tok.lang === 'mermaid') {
         return <MermaidDiagram key={i} chart={tok.body.trim()} />;
       }
-      // ```cudadiagram\nName\n``` -> render the named React SVG component from CudaDiagrams
+      // ```cudadiagram\nName\n``` -> render the named React SVG component
+      // from CudaDiagrams.jsx. The module is lazy-loaded on first render to
+      // avoid bundling its 2.5k lines into every non-CUDA module page.
       if (tok.lang === 'cudadiagram') {
         const name = tok.body.trim().split('\n')[0].trim();
-        const Cmp = CudaDiagrams[name];
-        if (Cmp) return <div key={i} style={{ margin: '16px 0', display: 'flex', justifyContent: 'center', overflow: 'auto' }}><Cmp /></div>;
-        return <div key={i} style={{ margin: '12px 0', padding: '12px', background: 'var(--bg-tertiary)', borderRadius: '6px', color: '#f85149', fontSize: '13px' }}>Unknown diagram: <code>{name}</code></div>;
+        return <div key={i} style={{ margin: '16px 0', display: 'flex', justifyContent: 'center', overflow: 'auto' }}><CudaDiagram name={name} /></div>;
       }
       // Map common aliases to Prism language names. Only python, cpp, bash, javascript
       // are registered with PrismLight — anything else falls back to plain text.
