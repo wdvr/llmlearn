@@ -46,10 +46,24 @@ NUM=$(git rev-list --count HEAD)
 COMMIT_HASH=$HASH BUILD_NUM=$NUM docker compose build \
   --build-arg COMMIT_HASH=$HASH --build-arg BUILD_NUM=$NUM >> "$LOG" 2>&1
 
-# Use down+up instead of just up (which races during recreate, leaving
-# orphan containers like `<hash>_llmlearn`).
+# Recreate cleanly. `docker compose down --remove-orphans` is *supposed* to
+# tear everything down, but it has raced twice with `up -d` and left an
+# orphaned hash-prefixed container blocking the recreate. Defensive sequence:
+#   1. down --remove-orphans (graceful shutdown)
+#   2. force-remove any container still bound to the name (handles the race)
+#   3. up -d (clean creation)
+# Each step swallows its own error so a missing container doesn't fail the
+# script. The `up -d` exit code is checked — that's the one that matters.
 docker compose down --remove-orphans >> "$LOG" 2>&1 || true
-docker compose up -d >> "$LOG" 2>&1
+docker rm -f llmlearn >> "$LOG" 2>&1 || true
+if ! docker compose up -d >> "$LOG" 2>&1; then
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] docker compose up FAILED" >> "$LOG"
+  # One more retry after a force-clean: sometimes a container is still
+  # being created when up first runs.
+  sleep 2
+  docker rm -f llmlearn >> "$LOG" 2>&1 || true
+  docker compose up -d >> "$LOG" 2>&1
+fi
 docker image prune -f >> "$LOG" 2>&1
 
 # Record what we just deployed so we won't rebuild on the next cron tick.

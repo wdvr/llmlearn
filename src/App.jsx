@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, Suspense } from 'react'
 import { Routes, Route, Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { courses, allModules, findCourse, findModuleCourse } from './content/courses'
-import { readingTimeFor } from './content/reading-times'
+import { readingTimeFor, courseTotalMinutes, formatMinutes } from './content/reading-times'
 
 const ModulePage = React.lazy(() => import('./components/ModulePage'))
 const PRReview = React.lazy(() => import('./components/PRReview'))
@@ -739,6 +739,7 @@ function LandingPage({ courses, completed, lastVisited }) {
         {courses.map(course => {
           const done = course.modules.filter(m => completed.includes(m.id)).length
           const pct = Math.round((done / course.modules.length) * 100)
+          const totalMin = courseTotalMinutes(course)
           return (
             <Link
               key={course.id}
@@ -756,11 +757,15 @@ function LandingPage({ courses, completed, lastVisited }) {
               <p className="course-subtitle">{course.subtitle}</p>
               <p className="course-desc">{course.description}</p>
               <div className="course-meta">
-                <span>{course.modules.length} modules</span>
+                <span>{course.modules.length} module{course.modules.length === 1 ? '' : 's'}</span>
                 <span>·</span>
                 <span>{course.level}</span>
-                <span>·</span>
-                <span>{course.hours}</span>
+                {totalMin && (
+                  <>
+                    <span>·</span>
+                    <span title="Sum of reading-time estimates across all modules">≈ {formatMinutes(totalMin)} reading</span>
+                  </>
+                )}
               </div>
               <div className="course-progress">
                 <div className="course-progress-bar">
@@ -793,6 +798,7 @@ function CoursePage({ courses, completed }) {
 
   const done = course.modules.filter(m => completed.includes(m.id)).length
   const pct = Math.round((done / course.modules.length) * 100)
+  const totalMin = courseTotalMinutes(course)
 
   return (
     <div className="home">
@@ -807,11 +813,15 @@ function CoursePage({ courses, completed }) {
           <h2>{course.title}</h2>
           <p className="subtitle">{course.description}</p>
           <div className="course-meta">
-            <span>{course.modules.length} modules</span>
+            <span>{course.modules.length} module{course.modules.length === 1 ? '' : 's'}</span>
             <span>·</span>
             <span>{course.level}</span>
-            <span>·</span>
-            <span>{course.hours}</span>
+            {totalMin && (
+              <>
+                <span>·</span>
+                <span title="Sum of reading-time estimates across all modules">≈ {formatMinutes(totalMin)} reading</span>
+              </>
+            )}
             <span>·</span>
             <span>{done}/{course.modules.length} · {pct}%</span>
           </div>

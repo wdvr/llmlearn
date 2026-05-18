@@ -39,3 +39,24 @@ export const readingTimes = {
 export function readingTimeFor(moduleId) {
   return readingTimes[moduleId] || null
 }
+
+// Sum reading time across all modules in a course. Returns minutes or null
+// if no module has a known time. Used by the landing/course pages.
+export function courseTotalMinutes(course) {
+  if (!course?.modules) return null
+  let total = 0; let known = 0
+  for (const m of course.modules) {
+    const t = readingTimes[m.id]
+    if (typeof t === "number") { total += t; known++ }
+  }
+  return known > 0 ? total : null
+}
+
+// Format minutes as a compact human string: "47 min", "1h 32m", "5h".
+export function formatMinutes(min) {
+  if (!min || min <= 0) return ""
+  if (min < 60) return min + " min"
+  const h = Math.floor(min / 60)
+  const m = min % 60
+  return m === 0 ? (h + "h") : (h + "h " + m + "m")
+}
