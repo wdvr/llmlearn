@@ -890,6 +890,8 @@ export default function ModulePage({
                   to={`/module/${relId}`}
                   className="related-card"
                   style={{ '--course-color': relCourse.color }}
+                  onMouseEnter={() => loadModule(relId)}
+                  onFocus={() => loadModule(relId)}
                 >
                   <div className="related-icon" aria-hidden="true">{relCourse.icon}</div>
                   <div className="related-text">
@@ -922,7 +924,12 @@ export default function ModulePage({
 
       <div className="module-nav">
         {prevModule ? (
-          <Link to={`/module/${prevModule.id}`} className="btn btn-secondary module-nav-btn">
+          <Link
+            to={`/module/${prevModule.id}`}
+            className="btn btn-secondary module-nav-btn"
+            onMouseEnter={() => loadModule(prevModule.id)}
+            onFocus={() => loadModule(prevModule.id)}
+          >
             <span className="module-nav-arrow" aria-hidden="true">←</span>
             <span className="module-nav-text">
               <span className="module-nav-label">Previous</span>
@@ -958,7 +965,12 @@ export default function ModulePage({
         )}
 
         {nextModule ? (
-          <Link to={`/module/${nextModule.id}`} className="btn btn-secondary module-nav-btn module-nav-btn-next">
+          <Link
+            to={`/module/${nextModule.id}`}
+            className="btn btn-secondary module-nav-btn module-nav-btn-next"
+            onMouseEnter={() => loadModule(nextModule.id)}
+            onFocus={() => loadModule(nextModule.id)}
+          >
             <span className="module-nav-text">
               <span className="module-nav-label">Next up</span>
               <span className="module-nav-title">{nextModule.title}</span>

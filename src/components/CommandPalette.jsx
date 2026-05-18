@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { courses, allModules, findModuleCourse } from '../content/courses'
+import { courses, allModules, findModuleCourse, loadModule } from '../content/courses'
 import { glossary } from '../content/glossary'
 import { readingTimeFor } from '../content/reading-times'
 
@@ -35,6 +35,7 @@ function buildIndex() {
       title: m.title,
       subtitle: course?.title || '',
       href: `#/module/${m.id}`,
+      moduleId: m.id,
       icon: course?.icon || '📘',
       color: course?.color,
       readingMinutes: readingTimeFor(m.id),
@@ -166,6 +167,14 @@ export default function CommandPalette({ open, onClose }) {
     if (el?.scrollIntoView) el.scrollIntoView({ block: 'nearest' })
   }, [selected, results])
 
+  // Prefetch the module chunk for the currently-highlighted result so that
+  // pressing Enter feels instant — covers keyboard navigation in addition to
+  // mouse hover.
+  useEffect(() => {
+    const r = results[selected]
+    if (r?.moduleId) loadModule(r.moduleId)
+  }, [selected, results])
+
   const choose = (entry) => {
     if (!entry) return
     onClose()
@@ -257,7 +266,11 @@ export default function CommandPalette({ open, onClose }) {
               <button
                 key={`${r.kind}-${r.href}-${i}`}
                 className={`cmdk-item ${i === selected ? 'active' : ''}`}
-                onMouseEnter={() => setSelected(i)}
+                onMouseEnter={() => {
+                  setSelected(i)
+                  if (r.moduleId) loadModule(r.moduleId)
+                }}
+                onFocus={() => { if (r.moduleId) loadModule(r.moduleId) }}
                 onClick={() => choose(r)}
                 type="button"
               >

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, Suspense } from 'react'
 import { Routes, Route, Link, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { courses, allModules, findCourse, findModuleCourse } from './content/courses'
+import { courses, allModules, findCourse, findModuleCourse, loadModule } from './content/courses'
 import { readingTimeFor, courseTotalMinutes, formatMinutes } from './content/reading-times'
 
 const ModulePage = React.lazy(() => import('./components/ModulePage'))
@@ -489,6 +489,8 @@ function App() {
                     <Link
                       to={`/module/${mod.id}`}
                       className={`nav-item ${isActive ? 'active' : ''} ${completed.includes(mod.id) ? 'completed' : ''}`}
+                      onMouseEnter={() => loadModule(mod.id)}
+                      onFocus={() => loadModule(mod.id)}
                     >
                       <span className="nav-dot" />
                       <span>{mod.title}</span>
@@ -856,6 +858,8 @@ function LandingPage({ courses, completed, lastVisited, recentlyVisited }) {
         <Link
           to={`/module/${resumeModule.module.id}`}
           className="resume-card"
+          onMouseEnter={() => loadModule(resumeModule.module.id)}
+          onFocus={() => loadModule(resumeModule.module.id)}
           onClick={() => {
             // Signal to ModulePage that the user explicitly hit "Resume" so
             // it should auto-scroll to the saved bookmark instead of starting
@@ -886,6 +890,8 @@ function LandingPage({ courses, completed, lastVisited, recentlyVisited }) {
                   to={`/module/${module.id}`}
                   className="recent-card"
                   style={{ '--course-color': course.color }}
+                  onMouseEnter={() => loadModule(module.id)}
+                  onFocus={() => loadModule(module.id)}
                 >
                   <span className="recent-icon" aria-hidden="true">{course.icon}</span>
                   <div className="recent-text">
@@ -1049,6 +1055,8 @@ function CoursePage({ courses, completed, recentlyVisited = [] }) {
           to={`/module/${resumeInCourse.module.id}`}
           className="course-resume"
           style={{ '--course-color': course.color }}
+          onMouseEnter={() => loadModule(resumeInCourse.module.id)}
+          onFocus={() => loadModule(resumeInCourse.module.id)}
         >
           <span className="course-resume-icon" aria-hidden="true">
             {resumeInCourse.reason === 'recent' ? '↪' : '▶'}
@@ -1086,6 +1094,8 @@ function CoursePage({ courses, completed, recentlyVisited = [] }) {
               key={mod.id}
               to={`/module/${mod.id}`}
               className={`module-card ${completed.includes(mod.id) ? 'completed' : ''}`}
+              onMouseEnter={() => loadModule(mod.id)}
+              onFocus={() => loadModule(mod.id)}
             >
               <div className="module-num" style={{ color: course.color }}>
                 {completed.includes(mod.id) ? '✓' : i + 1}
