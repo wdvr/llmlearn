@@ -25,6 +25,26 @@ export const modules = [
       { id: 'mps-apple-gpu-architecture', note: 'Why Snake DQN trains so well on MPS — small model, unified memory.' },
     ],
   },
+  {
+    id: 'rl-policy-gradient-ppo',
+    title: 'Policy Gradient & PPO — From REINFORCE to RLHF',
+    description: 'The other half of modern RL. Why value-based methods (DQN) hit a wall on continuous or huge action spaces, how policy gradient methods bypass that, the variance problem REINFORCE has, and why PPO\'s clipped surrogate became the workhorse for everything from OpenAI Five to RLHF.',
+    sections: [
+      { title: 'Where DQN Runs Out of Road' },
+      { title: 'REINFORCE — The Vanilla Policy Gradient' },
+      { title: 'Advantage, Baselines, and GAE' },
+      { title: 'The Trust-Region Idea (TRPO)' },
+      { title: 'PPO — The Clipped Surrogate' },
+      { title: 'The RLHF Connection' },
+      { title: 'Where to Go Next' },
+    ],
+    loader: () => import('./modules/rl02-policy-gradient-ppo.json'),
+    relatedModules: [
+      { id: 'rl-snake', note: 'DQN — the value-based predecessor PPO improves upon.' },
+      { id: 'training-inference-details', note: 'Optimizer / loss patterns that show up in PPO\'s actor-critic loop.' },
+      { id: 'attention-deeper', note: 'The LM that RLHF fine-tunes on top of.' },
+    ],
+  },
 ]
 
 // Cache for full module content keyed by module id.

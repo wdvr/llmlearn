@@ -32,6 +32,7 @@ export const readingTimes = {
   'mps-tensor-fundamentals': 19,
   'nn-module-training': 43,
   'qkv-deep-dive': 26,
+  'rl-policy-gradient-ppo': 16,
   'rl-snake': 37,
   'tensors-devices': 17,
   'tiny-transformer': 24,
