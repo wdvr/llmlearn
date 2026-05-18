@@ -4041,3 +4041,70 @@ code, pre {
     max-width: 100%;
   }
 }
+
+/* ============================================================
+   Skeletons — placeholder layouts while lazy content loads.
+   Used by RouteFallback (Suspense) and ModulePage's inner
+   loading state. Shimmer animation reuses the existing
+   text-muted / background-card variables so the skeleton
+   inherits the user's theme.
+   ============================================================ */
+.skeleton-header {
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border, rgba(255,255,255,0.08));
+}
+.skeleton-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.skeleton-spacer {
+  height: 12px;
+}
+.skeleton-line {
+  height: 14px;
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    rgba(255,255,255,0.04) 0%,
+    rgba(255,255,255,0.10) 50%,
+    rgba(255,255,255,0.04) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+  width: 100%;
+  max-width: 760px;
+}
+.skeleton-line-title {
+  height: 32px;
+  width: 60%;
+  margin-bottom: 14px;
+  border-radius: 8px;
+}
+.skeleton-line-meta {
+  height: 14px;
+  width: 35%;
+}
+.skeleton-line-heading {
+  height: 22px;
+  width: 40%;
+  margin-top: 8px;
+  border-radius: 7px;
+}
+.skeleton-line-wide {
+  width: 92%;
+}
+.skeleton-line-narrow {
+  width: 65%;
+}
+@keyframes skeleton-shimmer {
+  0%   { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-line {
+    animation: none;
+    background: rgba(255,255,255,0.06);
+  }
+}

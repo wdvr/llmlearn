@@ -728,17 +728,40 @@ export default function ModulePage({
     return <NotFound what="module" detail={`No module with id "${id}".`} />
   }
   if (!module) {
-    return <div className="content"><p>Loading...</p></div>
+    // No manifest yet (route mounting). Generic skeleton.
+    return (
+      <div className="content" aria-busy="true" aria-label="Loading module">
+        <div className="skeleton skeleton-header">
+          <div className="skeleton-line skeleton-line-title" />
+          <div className="skeleton-line skeleton-line-meta" />
+        </div>
+        <div className="skeleton-body">
+          <div className="skeleton-line" />
+          <div className="skeleton-line skeleton-line-wide" />
+          <div className="skeleton-line skeleton-line-narrow" />
+        </div>
+      </div>
+    )
   }
   if (!fullModule) {
-    // Manifest known but content still fetching — show header + skeleton.
+    // Manifest known (title/description available) — show real header so
+    // the user can confirm they landed in the right place, then a body
+    // skeleton while sections.content streams in.
     return (
-      <div className="content">
+      <div className="content" aria-busy="true" aria-label="Loading module content">
         <div className="module-header">
           <h2>{module.title}</h2>
           <p>{module.description}</p>
         </div>
-        <p style={{ color: 'var(--text-muted)' }}>Loading module content...</p>
+        <div className="skeleton-body">
+          <div className="skeleton-line" />
+          <div className="skeleton-line skeleton-line-wide" />
+          <div className="skeleton-line skeleton-line-narrow" />
+          <div className="skeleton-spacer" />
+          <div className="skeleton-line skeleton-line-heading" />
+          <div className="skeleton-line" />
+          <div className="skeleton-line skeleton-line-wide" />
+        </div>
       </div>
     )
   }

@@ -13,8 +13,28 @@ const KeyboardShortcuts = React.lazy(() => import('./components/KeyboardShortcut
 const NotFound = React.lazy(() => import('./components/NotFound'))
 const Progress = React.lazy(() => import('./components/Progress'))
 
+// Skeleton fallback for lazy-loaded routes. Mirrors the typical module
+// layout (header block + paragraph rows + a heading + more rows) so the
+// page doesn't visually pop when content arrives. The chunk almost always
+// resolves before the skeleton has a chance to render (modules prefetch on
+// hover), but on a cold link this is what the user sees for ~100-300ms.
 const RouteFallback = () => (
-  <div className="content"><p>Loading...</p></div>
+  <div className="content" aria-busy="true" aria-label="Loading content">
+    <div className="skeleton skeleton-header">
+      <div className="skeleton-line skeleton-line-title" />
+      <div className="skeleton-line skeleton-line-meta" />
+    </div>
+    <div className="skeleton-body">
+      <div className="skeleton-line" />
+      <div className="skeleton-line skeleton-line-wide" />
+      <div className="skeleton-line skeleton-line-narrow" />
+      <div className="skeleton-spacer" />
+      <div className="skeleton-line skeleton-line-heading" />
+      <div className="skeleton-line" />
+      <div className="skeleton-line skeleton-line-wide" />
+      <div className="skeleton-line" />
+    </div>
+  </div>
 )
 
 const STORAGE_VERSION = 2
