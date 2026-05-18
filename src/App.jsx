@@ -9,6 +9,7 @@ const ClaudeChat = React.lazy(() => import('./components/ClaudeChat'))
 const Scratch = React.lazy(() => import('./components/Scratch'))
 const Glossary = React.lazy(() => import('./components/Glossary'))
 const CommandPalette = React.lazy(() => import('./components/CommandPalette'))
+const NotFound = React.lazy(() => import('./components/NotFound'))
 
 const RouteFallback = () => (
   <div className="content"><p>Loading...</p></div>
@@ -627,6 +628,7 @@ function App() {
             />
             <Route path="/scratch" element={<Scratch />} />
             <Route path="/glossary" element={<Glossary />} />
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
       </main>
@@ -788,12 +790,8 @@ function CoursePage({ courses, completed }) {
   const course = courses.find(c => c.id === courseId)
 
   if (!course) {
-    return (
-      <div className="home">
-        <h2>Course not found</h2>
-        <Link to="/">Back to courses</Link>
-      </div>
-    )
+    // Lazy NotFound; outer Suspense in App handles the fallback.
+    return <NotFound what="course" detail={`No course with id "${courseId}".`} />
   }
 
   const done = course.modules.filter(m => completed.includes(m.id)).length

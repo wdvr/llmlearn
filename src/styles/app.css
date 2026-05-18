@@ -2086,6 +2086,101 @@ code, pre {
   transform: translateX(2px);
 }
 
+/* 404 / Not-found page — also used for missing courses/modules */
+.notfound {
+  text-align: center;
+  padding: 80px 24px;
+  max-width: 640px;
+  margin: 0 auto;
+}
+.notfound-icon {
+  font-size: 56px;
+  margin-bottom: 18px;
+  opacity: 0.7;
+}
+.notfound-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 12px;
+}
+.notfound-detail {
+  font-size: 15px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  line-height: 1.6;
+}
+.notfound-detail code {
+  background: var(--bg-tertiary);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 13px;
+  color: var(--text);
+}
+.notfound-cta {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+  margin: 32px 0 12px;
+  font-weight: 600;
+}
+.notfound-courses {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+.notfound-course {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--course-color, var(--accent));
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  transition: border-color 0.15s, background 0.15s, transform 0.15s;
+}
+.notfound-course:hover {
+  border-color: var(--course-color, var(--accent));
+  background: var(--bg-hover);
+  transform: translateY(-1px);
+}
+.notfound-course-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+.notfound-tips {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 8px 0 20px;
+  line-height: 1.7;
+}
+.notfound-tips kbd {
+  font-family: 'JetBrains Mono', monospace;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 11px;
+  margin: 0 1px;
+}
+.notfound-tips a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-color: rgba(88,166,255,0.3);
+}
+.notfound-back {
+  margin-top: 16px;
+}
+
 /* Sidebar search button — opens the Cmd/Ctrl-K palette. Discoverable for
    users who don't know the keyboard shortcut. */
 .sidebar-search {

@@ -16,6 +16,7 @@ import * as CudaDiagrams from './CudaDiagrams'
 import { findModuleCourse, findModule, loadModule } from '../content/courses'
 import { glossaryByTerm } from '../content/glossary'
 import { readingTimeFor } from '../content/reading-times'
+import NotFound from './NotFound'
 
 SyntaxHighlighter.registerLanguage('python', python)
 SyntaxHighlighter.registerLanguage('cpp', cpp)
@@ -602,7 +603,7 @@ export default function ModulePage({
   }, [id, fullModule])
 
   if (!manifestModule && loadError === 'not-found') {
-    return <div className="content"><p>Module not found.</p></div>
+    return <NotFound what="module" detail={`No module with id "${id}".`} />
   }
   if (!module) {
     return <div className="content"><p>Loading...</p></div>
