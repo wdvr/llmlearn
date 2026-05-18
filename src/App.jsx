@@ -35,6 +35,7 @@ function App() {
   const [navOpen, setNavOpen] = useState(false)
   const [cmdkOpen, setCmdkOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const [chatHidden, setChatHidden] = useState(false)
   const [fontSize, setFontSize] = useState(() => {
     try { return parseInt(localStorage.getItem('font_size') || '15') } catch { return 15 }
   })
@@ -289,6 +290,42 @@ function App() {
 
   // Close mobile drawer on every navigation.
   useEffect(() => { setNavOpen(false) }, [location.pathname])
+
+  // Auto-hide the floating Claude chat button while scrolling down so it
+  // doesn't overlap content like the "Mark as Complete" button on long
+  // module pages. Reappears on scroll-up or when near the top of the page.
+  // Skip the behavior on home/glossary/progress where the page is shorter
+  // and the button is small relative to viewport.
+  useEffect(() => {
+    let lastY = window.scrollY || 0
+    let raf = null
+    const onScroll = () => {
+      if (raf) return
+      raf = requestAnimationFrame(() => {
+        const y = window.scrollY || 0
+        const delta = y - lastY
+        // Near top → always show. Otherwise: hide on big scroll-down,
+        // show on scroll-up.
+        if (y < 200) {
+          setChatHidden(false)
+        } else if (delta > 8) {
+          setChatHidden(true)
+        } else if (delta < -8) {
+          setChatHidden(false)
+        }
+        lastY = y
+        raf = null
+      })
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => {
+      window.removeEventListener('scroll', onScroll)
+      if (raf) cancelAnimationFrame(raf)
+    }
+  }, [])
+
+  // Reset to visible when the route changes or chat panel opens.
+  useEffect(() => { setChatHidden(false) }, [location.pathname, chatOpen])
 
   // Global keyboard shortcuts:
   //   Cmd/Ctrl+K → command palette (anywhere)
@@ -702,7 +739,7 @@ function App() {
         <ClaudeChat isOpen={chatOpen} onClose={() => setChatOpen(false)} appContext={appContext} />
       </Suspense>
       <button
-        className="chat-toggle"
+        className={`chat-toggle ${chatHidden && !chatOpen ? 'chat-toggle-hidden' : ''}`}
         onClick={() => setChatOpen(!chatOpen)}
         title="Ask Claude"
         aria-label={chatOpen ? 'Close Claude chat' : 'Open Claude chat'}

@@ -1105,12 +1105,21 @@ code, pre {
   justify-content: center;
   box-shadow: var(--shadow-md);
   z-index: 5;
-  transition: background 0.15s, transform 0.15s;
+  transition: background 0.15s, transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s;
 }
 
 .chat-toggle:hover {
   background: var(--accent);
   transform: translateY(-2px);
+}
+
+/* Hide-on-scroll-down behavior: slide off-screen and fade out. Pointer
+   events disabled so the user doesn't accidentally tap while it's
+   animating out. Reappears on scroll up via the App effect. */
+.chat-toggle-hidden {
+  transform: translateY(80px);
+  opacity: 0;
+  pointer-events: none;
 }
 
 /* PR Review */
