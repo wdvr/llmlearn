@@ -407,15 +407,22 @@ function inlineMarkdown(text, linkifiedSlugs) {
       const entry = lookupGlossaryTerm(inner);
       if (entry && linkifiedSlugs && !linkifiedSlugs.has(entry.slug)) {
         linkifiedSlugs.add(entry.slug);
-        // Use a hash-router-safe href: /#/glossary#<slug>. The Glossary page
-        // parses the slug from the raw URL on mount and scrolls to it.
+        // Wrap link in a span so we can sibling-position a hover popover
+        // that shows the definition inline (desktop hover, keyboard focus).
+        // The href still works for click/tap, jumping to /#/glossary#slug.
         tokens.push(
-          <a
-            key={key++}
-            href={`#/glossary#${entry.slug}`}
-            className="glossary-link"
-            title={entry.definition}
-          >{inner}</a>
+          <span key={key++} className="glossary-link-wrap">
+            <a
+              href={`#/glossary#${entry.slug}`}
+              className="glossary-link"
+              aria-describedby={`glossary-pop-${entry.slug}`}
+            >{inner}</a>
+            <span className="glossary-popover" id={`glossary-pop-${entry.slug}`} role="tooltip">
+              <span className="glossary-popover-term">{entry.term}</span>
+              <span className="glossary-popover-def">{entry.definition}</span>
+              <span className="glossary-popover-cta">Open in glossary →</span>
+            </span>
+          </span>
         );
       } else {
         tokens.push(<strong key={key++} style={{ color: 'var(--accent)', fontWeight: 600 }}>{inner}</strong>);

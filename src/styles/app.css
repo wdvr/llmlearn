@@ -2497,6 +2497,77 @@ code, pre {
   color: var(--accent);
 }
 
+/* Hover popover for glossary terms — shows the definition inline so the user
+   doesn't have to navigate away. Pure CSS (hover/focus-within), desktop-only
+   in effect since mobile taps follow the link immediately. */
+.glossary-link-wrap {
+  position: relative;
+  display: inline;
+}
+.glossary-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  display: none;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 50;
+  width: max-content;
+  max-width: min(360px, calc(100vw - 24px));
+  padding: 12px 14px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  box-shadow: var(--shadow-md);
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 400;
+  line-height: 1.55;
+  text-align: left;
+  cursor: default;
+  pointer-events: none; /* don't block the link's click area until hovered */
+  opacity: 0;
+  transform: translateY(-2px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.glossary-link-wrap:hover .glossary-popover,
+.glossary-link-wrap:focus-within .glossary-popover,
+.glossary-popover:hover {
+  display: flex;
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+.glossary-popover-term {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--accent);
+  letter-spacing: 0.2px;
+}
+.glossary-popover-def {
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+.glossary-popover-cta {
+  font-size: 11px;
+  color: var(--accent);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 2px;
+}
+
+/* On narrow viewports the popover can run off the right edge — flip it left. */
+@media (max-width: 600px) {
+  .glossary-popover {
+    /* Mobile taps follow the link immediately so the popover rarely shows.
+       Hide it entirely to avoid awkward focus-state flashes after navigation. */
+    display: none !important;
+  }
+}
+
 /* Landing-page glossary card — reuses .scratch-card layout but recolors to purple */
 .scratch-card.glossary-card {
   background: linear-gradient(135deg, rgba(188, 140, 255, 0.07), rgba(88, 166, 255, 0.04));
