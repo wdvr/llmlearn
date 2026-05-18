@@ -391,9 +391,11 @@ function inlineMarkdown(text, linkifiedSlugs) {
     const bold = rest.match(/\*\*(.+?)\*\*/);
     const code = rest.match(/`([^`]+)`/);
     const link = rest.match(/\[([^\]]+)\]\(([^)]+)\)/);
-    // Italic: single * not adjacent to another *, with non-whitespace
-    // content (so we don't pick up bullet-list star characters).
-    const italic = rest.match(/(?<!\*)\*(?!\*|\s)([^*\n]+?)(?<!\s|\*)\*(?!\*)/);
+    // Italic: single * not adjacent to another * and not intraword. The
+    // opening * must not be preceded by a word character (so math like
+    // `2*X*y` doesn't match), and the closing * must not be followed by
+    // a word character. Content must not start or end with whitespace.
+    const italic = rest.match(/(?<![\w\*])\*(?!\*|\s)([^*\n]+?)(?<!\s|\*)\*(?![\w\*])/);
     const candidates = [bold, code, link, italic].filter(Boolean);
     if (!candidates.length) { tokens.push(rest); break; }
 

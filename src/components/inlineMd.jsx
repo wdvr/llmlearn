@@ -28,7 +28,7 @@ function parseInline(text, keyPrefix) {
     const bold = rest.match(/\*\*(.+?)\*\*/)
     const code = rest.match(/`([^`]+)`/)
     const link = rest.match(/\[([^\]]+)\]\(([^)]+)\)/)
-    const italic = rest.match(/(?<!\*)\*(?!\*|\s)([^*\n]+?)(?<!\s|\*)\*(?!\*)/)
+    const italic = rest.match(/(?<![\w\*])\*(?!\*|\s)([^*\n]+?)(?<!\s|\*)\*(?![\w\*])/)
     const candidates = [bold, code, link, italic].filter(Boolean)
     if (!candidates.length) { tokens.push(rest); break }
 
