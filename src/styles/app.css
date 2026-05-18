@@ -560,6 +560,67 @@ code, pre {
   margin: 40px 0;
 }
 
+/* Fenced code block wrapper — adds a hover-revealed copy button + language
+   chip at the top-right. Pure section-content blocks (inside markdown
+   prose) didn't previously have a copy affordance; the standalone
+   <CodeBlock> component for section.code still has its own. */
+.fenced-wrap {
+  position: relative;
+  margin: 12px 0;
+}
+.fenced-meta {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 0.15s;
+  pointer-events: none;
+}
+.fenced-wrap:hover .fenced-meta,
+.fenced-wrap:focus-within .fenced-meta {
+  opacity: 1;
+  pointer-events: auto;
+}
+.fenced-lang {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  background: rgba(0, 0, 0, 0.4);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+.fenced-copy {
+  background: rgba(0, 0, 0, 0.55);
+  color: var(--text);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.fenced-copy:hover {
+  background: var(--accent-dark);
+  border-color: var(--accent);
+  color: white;
+}
+.fenced-copy.copied {
+  background: var(--green);
+  border-color: var(--green);
+  color: white;
+}
+.fenced-wrap-text {
+  position: relative;
+}
+
 /* Per-question progress segments above the active question — one slim bar
    per question, colored by outcome so users see their run at a glance. */
 .quiz-progress {

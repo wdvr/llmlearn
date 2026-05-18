@@ -91,6 +91,46 @@ function slugify(s) {
   return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 }
 
+// Small copy button rendered at the top-right of a fenced code block. Pure
+// presentational; the copy uses the Clipboard API with a textarea fallback
+// for older browsers. Shows a brief "Copied" confirmation.
+function CopyButton({ getText, lang }) {
+  const [copied, setCopied] = useState(false)
+  const handle = async (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const text = typeof getText === 'function' ? getText() : String(getText || '')
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      const ta = document.createElement('textarea')
+      ta.value = text
+      ta.style.position = 'fixed'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.select()
+      try { document.execCommand('copy') } catch {}
+      document.body.removeChild(ta)
+    }
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
+  return (
+    <div className="fenced-meta">
+      {lang && <span className="fenced-lang" aria-hidden="true">{lang}</span>}
+      <button
+        type="button"
+        className={`fenced-copy ${copied ? 'copied' : ''}`}
+        onClick={handle}
+        aria-label={copied ? 'Code copied' : 'Copy code to clipboard'}
+        title={copied ? 'Copied!' : 'Copy'}
+      >
+        {copied ? '✓ Copied' : 'Copy'}
+      </button>
+    </div>
+  )
+}
+
 function PermalinkIcon({ slug }) {
   const [copied, setCopied] = useState(false)
   const onClick = (e) => {
@@ -240,25 +280,30 @@ function renderMarkdown(text, linkifiedSlugs) {
       // are registered with PrismLight — anything else falls back to plain text.
       const langMap = { cuda: 'cpp', cu: 'cpp', c: 'cpp', 'c++': 'cpp', shell: 'bash', sh: 'bash', js: 'javascript', '': 'text', text: 'text' };
       const lang = langMap[tok.lang.toLowerCase()] ?? tok.lang.toLowerCase();
+      const body = tok.body.replace(/\n$/, '');
       // Plain (no-lang) fences are usually ASCII diagrams or output — render unhighlighted.
       if (lang === 'text') {
         return (
-          <div key={i} className="code-block" style={{ margin: '12px 0' }}>
-            <pre style={{ padding: '12px 16px', fontSize: '13px', lineHeight: '1.5', overflow: 'auto' }}>
-              <code>{tok.body.replace(/\n$/, '')}</code>
-            </pre>
+          <div key={i} className="fenced-wrap fenced-wrap-text">
+            <CopyButton getText={() => body} />
+            <div className="code-block" style={{ margin: 0 }}>
+              <pre style={{ padding: '12px 16px', fontSize: '13px', lineHeight: '1.5', overflow: 'auto' }}>
+                <code>{body}</code>
+              </pre>
+            </div>
           </div>
         );
       }
       return (
-        <div key={i} style={{ margin: '12px 0', borderRadius: '6px', overflow: 'hidden' }}>
+        <div key={i} className="fenced-wrap" style={{ margin: '12px 0', borderRadius: '6px', overflow: 'hidden' }}>
+          <CopyButton getText={() => body} lang={tok.lang || undefined} />
           <SyntaxHighlighter
             language={lang}
             style={vscDarkPlus}
             customStyle={{ margin: 0, padding: '12px 16px', fontSize: '13px', lineHeight: '1.5', background: 'var(--code-bg, #1e1e1e)' }}
             wrapLongLines={false}
           >
-            {tok.body.replace(/\n$/, '')}
+            {body}
           </SyntaxHighlighter>
         </div>
       );
