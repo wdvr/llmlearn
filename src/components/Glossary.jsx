@@ -37,6 +37,25 @@ export default function Glossary() {
   const [filter, setFilter] = useState('')
   const [activeCategory, setActiveCategory] = useState(null)
   const sectionRefs = useRef({})
+  const filterRef = useRef(null)
+
+  // Press '/' anywhere on the page to jump-focus the filter input.
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === '/' && document.activeElement?.tagName !== 'INPUT' &&
+          document.activeElement?.tagName !== 'TEXTAREA') {
+        e.preventDefault()
+        filterRef.current?.focus()
+        filterRef.current?.select()
+      } else if (e.key === 'Escape' && document.activeElement === filterRef.current) {
+        e.preventDefault()
+        if (filter) setFilter('')
+        else filterRef.current?.blur()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [filter])
 
   // Initial scroll to hash if the URL has one (e.g. /glossary#kv-cache)
   useEffect(() => {
@@ -122,9 +141,10 @@ export default function Glossary() {
 
       <div className="glossary-toolbar">
         <input
+          ref={filterRef}
           type="search"
           className="glossary-filter"
-          placeholder="Filter — e.g. KV cache, RoPE, BF16, occupancy"
+          placeholder="Filter — e.g. KV cache, RoPE, BF16, occupancy (press / to focus)"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           aria-label="Filter glossary"

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useMemo } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import mermaid from 'mermaid'
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter'
@@ -177,6 +177,21 @@ function humanAgo(ms) {
   if (day < 30) return `${day} day${day === 1 ? '' : 's'} ago`
   const mo = Math.floor(day / 30)
   return `${mo} mo ago`
+}
+
+// Estimate reading time in minutes. Technical reading runs ~800-1000 chars/min;
+// we use 850 to be slightly conservative. Code blocks contribute at half rate
+// (they're slower to read carefully) but we keep it simple and treat all
+// characters equally for now — the noise floor of estimates makes a more
+// elaborate model not worth it.
+function estimateReadingMinutes(fullModule) {
+  if (!fullModule) return null
+  let chars = 0
+  for (const s of fullModule.sections || []) {
+    chars += (s.content || '').length + (s.code || '').length
+  }
+  const minutes = Math.max(1, Math.round(chars / 850))
+  return minutes
 }
 
 // Look up a `**bold**` inner string in the curated glossary. Case-insensitive,
@@ -477,6 +492,9 @@ export default function ModulePage({
   const [showResumeBanner, setShowResumeBanner] = useState(false)
   const currentSectionRef = useRef(null)
 
+  // Scroll progress (0..100) shown as a thin bar at the top of the page.
+  const [scrollProgress, setScrollProgress] = useState(0)
+
   useEffect(() => {
     let cancelled = false
     setFullModule(null)
@@ -513,24 +531,35 @@ export default function ModulePage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
-  // Save scroll position as the user reads. Debounced — fires at most every
-  // 500ms while scrolling, plus one trailing save after they stop.
+  // Save scroll position as the user reads + update scroll-progress bar.
+  // Two cadences: the progress bar updates immediately every scroll event for
+  // smooth UI; the bookmark save is debounced (500ms trailing) since each
+  // call goes to localStorage and potentially syncs to the server.
   useEffect(() => {
-    if (!fullModule || !onSaveScrollPosition) return
-    let timer = null
+    if (!fullModule) return
+    let saveTimer = null
     const handleScroll = () => {
-      clearTimeout(timer)
-      timer = setTimeout(() => {
-        const y = window.scrollY || document.documentElement.scrollTop || 0
-        onSaveScrollPosition(id, y, currentSectionRef.current)
-      }, 500)
+      const y = window.scrollY || document.documentElement.scrollTop || 0
+      const docH = document.documentElement.scrollHeight - window.innerHeight
+      const pct = docH > 0 ? Math.min(100, Math.max(0, (y / docH) * 100)) : 0
+      setScrollProgress(pct)
+      if (onSaveScrollPosition) {
+        clearTimeout(saveTimer)
+        saveTimer = setTimeout(() => {
+          onSaveScrollPosition(id, y, currentSectionRef.current)
+        }, 500)
+      }
     }
+    handleScroll()
     window.addEventListener('scroll', handleScroll, { passive: true })
     return () => {
       window.removeEventListener('scroll', handleScroll)
-      clearTimeout(timer)
+      clearTimeout(saveTimer)
     }
   }, [id, fullModule, onSaveScrollPosition])
+
+  // Reading-time estimate. Recomputed when the module content changes.
+  const readingMinutes = useMemo(() => estimateReadingMinutes(fullModule), [fullModule])
 
   // Track which section is visible via IntersectionObserver
   useEffect(() => {
@@ -589,6 +618,16 @@ export default function ModulePage({
 
   return (
     <div className="content">
+      <div
+        className="scroll-progress-bar"
+        role="progressbar"
+        aria-label="Reading progress"
+        aria-valuenow={Math.round(scrollProgress)}
+        aria-valuemin={0}
+        aria-valuemax={100}
+      >
+        <div className="scroll-progress-fill" style={{ width: `${scrollProgress}%` }} />
+      </div>
       {course && (
         <nav className="breadcrumb" aria-label="Breadcrumb">
           <Link to="/">Courses</Link>
@@ -603,6 +642,20 @@ export default function ModulePage({
       <div className="module-header">
         <h2>{module.title}</h2>
         <p>{module.description}</p>
+        {readingMinutes && (
+          <div className="module-meta" aria-label={`Estimated reading time ${readingMinutes} minutes`}>
+            <span className="module-meta-icon" aria-hidden="true">⏱</span>
+            <span>{readingMinutes} min read</span>
+            <span className="module-meta-sep" aria-hidden="true">·</span>
+            <span>{module.sections.length} sections</span>
+            {module.quiz && (
+              <>
+                <span className="module-meta-sep" aria-hidden="true">·</span>
+                <span>{module.quiz.length} quiz q's</span>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {showResumeBanner && initialBookmark.current && (
