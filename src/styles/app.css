@@ -2381,6 +2381,229 @@ code, pre {
   opacity: 1;
 }
 
+/* Progress overview page (/progress) */
+.progress-page {
+  max-width: 900px;
+}
+.progress-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin: 16px 0 32px;
+}
+.progress-tile {
+  padding: 18px 20px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.progress-tile-num {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.progress-tile-of {
+  font-size: 16px;
+  color: var(--text-muted);
+  font-weight: 500;
+  margin-left: 2px;
+}
+.progress-tile-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+  margin-top: 8px;
+  font-weight: 600;
+}
+.progress-section-heading {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-muted);
+  margin: 28px 0 12px;
+  font-weight: 700;
+}
+.progress-courses {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.progress-course {
+  padding: 16px 18px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--course-color, var(--accent));
+  border-radius: 10px;
+}
+.progress-course-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: inherit;
+  margin-bottom: 8px;
+}
+.progress-course-head:hover .progress-course-title {
+  color: var(--course-color, var(--accent));
+}
+.progress-course-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+.progress-course-title {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 700;
+  transition: color 0.15s;
+}
+.progress-course-counts {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.progress-course-bar {
+  height: 4px;
+  background: var(--bg-tertiary);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.progress-course-bar-fill {
+  height: 100%;
+  background: var(--course-color, var(--accent));
+  transition: width 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.progress-course-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 8px;
+}
+.progress-course-todo {
+  margin: 10px 0 0 16px;
+  padding: 0;
+  list-style: disc;
+}
+.progress-course-todo li {
+  font-size: 13px;
+  margin-bottom: 2px;
+}
+.progress-course-todo a {
+  color: var(--text);
+  text-decoration: none;
+}
+.progress-course-todo a:hover {
+  color: var(--course-color, var(--accent));
+  text-decoration: underline;
+  text-decoration-color: rgba(255,255,255,0.2);
+}
+.progress-course-todo-time {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.progress-quiz-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.progress-quiz-row {
+  display: grid;
+  grid-template-columns: 2fr 1.2fr auto auto;
+  gap: 12px;
+  padding: 8px 14px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  text-decoration: none;
+  color: inherit;
+  font-size: 13px;
+  transition: background 0.15s, border-color 0.15s;
+}
+.progress-quiz-row:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-hover);
+}
+.progress-quiz-row.passed { border-left: 3px solid var(--green); }
+.progress-quiz-row.failed { border-left: 3px solid var(--orange); }
+.progress-quiz-mod { font-weight: 600; color: var(--text); }
+.progress-quiz-course { color: var(--text-muted); font-size: 12px; }
+.progress-quiz-score { font-variant-numeric: tabular-nums; color: var(--text-muted); }
+.progress-quiz-pct { font-weight: 700; }
+.progress-quiz-row.passed .progress-quiz-pct { color: var(--green); }
+.progress-quiz-row.failed .progress-quiz-pct { color: var(--orange); }
+@media (max-width: 640px) {
+  .progress-quiz-row { grid-template-columns: 1fr auto; gap: 6px; }
+  .progress-quiz-course { grid-column: 1 / -1; }
+}
+
+.progress-recent-list, .progress-bookmark-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.progress-recent-row {
+  margin-bottom: 4px;
+}
+.progress-recent-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  text-decoration: none;
+  color: inherit;
+  font-size: 13px;
+  transition: background 0.15s;
+}
+.progress-recent-link:hover {
+  background: var(--bg-hover);
+}
+.progress-recent-check {
+  color: var(--green);
+  font-weight: 700;
+}
+.progress-recent-icon { font-size: 16px; line-height: 1; }
+.progress-recent-title { font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.progress-recent-meta { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+
+.progress-bookmark-list li {
+  padding: 6px 14px;
+  margin-bottom: 4px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+}
+.progress-bookmark-list a {
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+}
+.progress-bookmark-list a:hover { color: var(--accent); }
+.progress-bookmark-sec { color: var(--text-muted); font-style: italic; }
+.progress-bookmark-ago { color: var(--text-muted); font-size: 11px; }
+
+.progress-help {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+.progress-empty {
+  padding: 60px 24px;
+  text-align: center;
+  background: var(--bg-secondary);
+  border-radius: 10px;
+  color: var(--text-muted);
+}
+.progress-empty a {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
 /* 404 / Not-found page — also used for missing courses/modules */
 .notfound {
   text-align: center;

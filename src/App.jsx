@@ -11,6 +11,7 @@ const Glossary = React.lazy(() => import('./components/Glossary'))
 const CommandPalette = React.lazy(() => import('./components/CommandPalette'))
 const KeyboardShortcuts = React.lazy(() => import('./components/KeyboardShortcuts'))
 const NotFound = React.lazy(() => import('./components/NotFound'))
+const Progress = React.lazy(() => import('./components/Progress'))
 
 const RouteFallback = () => (
   <div className="content"><p>Loading...</p></div>
@@ -496,6 +497,13 @@ function App() {
                 <span className="nav-dot" />
                 <span>Glossary</span>
               </Link>
+              <Link
+                to="/progress"
+                className={`nav-item ${location.pathname.startsWith('/progress') ? 'active' : ''}`}
+              >
+                <span className="nav-dot" />
+                <span>Your progress</span>
+              </Link>
               {activeCourse.curatedPRs && activeCourse.curatedPRs.length > 0 && (
                 <Link
                   to="/prs"
@@ -546,6 +554,13 @@ function App() {
               >
                 <span className="nav-dot" />
                 <span>Glossary</span>
+              </Link>
+              <Link
+                to="/progress"
+                className={`nav-item ${location.pathname.startsWith('/progress') ? 'active' : ''}`}
+              >
+                <span className="nav-dot" />
+                <span>Your progress</span>
               </Link>
               {anyCuratedPRs && (
                 <Link
@@ -676,6 +691,7 @@ function App() {
             />
             <Route path="/scratch" element={<Scratch />} />
             <Route path="/glossary" element={<Glossary />} />
+            <Route path="/progress" element={<Progress />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
