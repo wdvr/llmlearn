@@ -560,6 +560,38 @@ code, pre {
   margin: 40px 0;
 }
 
+/* Per-question progress segments above the active question — one slim bar
+   per question, colored by outcome so users see their run at a glance. */
+.quiz-progress {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 18px;
+}
+.quiz-progress-seg {
+  flex: 1;
+  height: 4px;
+  background: var(--bg-tertiary);
+  border-radius: 2px;
+  transition: background 0.2s, transform 0.2s;
+}
+.quiz-progress-seg.correct {
+  background: var(--green);
+  box-shadow: 0 0 0 1px rgba(63, 185, 80, 0.15);
+}
+.quiz-progress-seg.incorrect {
+  background: var(--red);
+  box-shadow: 0 0 0 1px rgba(248, 81, 73, 0.15);
+}
+.quiz-progress-seg.current {
+  background: var(--accent);
+  transform: scaleY(1.5);
+  transform-origin: center;
+}
+.quiz-progress-seg.current.correct,
+.quiz-progress-seg.current.incorrect {
+  transform: scaleY(1.5);
+}
+
 .quiz-section h3 {
   font-size: 20px;
   margin-bottom: 24px;

@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react'
+import { inlineMd } from './inlineMd'
 
 export default function Quiz({ questions, moduleId, onScore }) {
   const [currentQ, setCurrentQ] = useState(0)
@@ -6,6 +7,9 @@ export default function Quiz({ questions, moduleId, onScore }) {
   const [answered, setAnswered] = useState(false)
   const [score, setScore] = useState(0)
   const [finished, setFinished] = useState(false)
+  // Track per-question outcomes for the progress bar (null=unanswered,
+  // true=correct, false=incorrect). Lets us color each segment.
+  const [outcomes, setOutcomes] = useState(() => questions.map(() => null))
   const optionRefs = useRef([])
 
   const q = questions[currentQ]
@@ -15,9 +19,13 @@ export default function Quiz({ questions, moduleId, onScore }) {
     if (answered) return
     setSelected(index)
     setAnswered(true)
-    if (index === q.correct) {
-      setScore(score + 1)
-    }
+    const correct = index === q.correct
+    if (correct) setScore(score + 1)
+    setOutcomes(prev => {
+      const next = prev.slice()
+      next[currentQ] = correct
+      return next
+    })
   }
 
   const handleNext = () => {
@@ -37,6 +45,7 @@ export default function Quiz({ questions, moduleId, onScore }) {
     setAnswered(false)
     setScore(0)
     setFinished(false)
+    setOutcomes(questions.map(() => null))
   }
 
   const handleKey = (e, i) => {
@@ -80,11 +89,35 @@ export default function Quiz({ questions, moduleId, onScore }) {
   return (
     <div className="quiz-section">
       <h3>Knowledge Check</h3>
+
+      {/* Progress segments: one per question. Colored by outcome so you can
+          see which you got right/wrong as you go. */}
+      <div
+        className="quiz-progress"
+        role="progressbar"
+        aria-label={`Question ${currentQ + 1} of ${questions.length}`}
+        aria-valuenow={currentQ + 1}
+        aria-valuemin={1}
+        aria-valuemax={questions.length}
+      >
+        {outcomes.map((o, i) => (
+          <span
+            key={i}
+            className={
+              'quiz-progress-seg' +
+              (o === true ? ' correct' : o === false ? ' incorrect' : '') +
+              (i === currentQ ? ' current' : '')
+            }
+            aria-hidden="true"
+          />
+        ))}
+      </div>
+
       <div className="quiz-question">
         <div className="quiz-counter">
           Question {currentQ + 1} of {questions.length}
         </div>
-        <p>{q.question}</p>
+        <p>{inlineMd(q.question)}</p>
         <div
           className="quiz-options"
           role="radiogroup"
@@ -108,7 +141,7 @@ export default function Quiz({ questions, moduleId, onScore }) {
                 onKeyDown={(e) => handleKey(e, i)}
               >
                 <span className="option-letter">{letters[i]}</span>
-                <span>{opt}</span>
+                <span>{inlineMd(opt)}</span>
               </div>
             )
           })}
@@ -116,8 +149,8 @@ export default function Quiz({ questions, moduleId, onScore }) {
 
         {answered && (
           <div className="quiz-explanation">
-            {selected === q.correct ? '✓ Correct! ' : '✗ Incorrect. '}
-            {q.explanation}
+            <strong>{selected === q.correct ? '✓ Correct! ' : '✗ Incorrect. '}</strong>
+            {inlineMd(q.explanation)}
           </div>
         )}
       </div>
