@@ -4108,3 +4108,31 @@ code, pre {
     background: rgba(255,255,255,0.06);
   }
 }
+
+/* Skip-to-content link — visible only when keyboard-focused.
+   Sits at the top-left at the absolute origin and pulls itself
+   into view via translateY on focus. */
+.skip-link {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 10000;
+  background: var(--accent, #5b9cff);
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  text-decoration: none;
+  transform: translateY(-200%);
+  transition: transform 0.15s ease-out;
+}
+.skip-link:focus,
+.skip-link:focus-visible {
+  transform: translateY(0);
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+.main:focus,
+.main:focus-visible {
+  outline: none;
+}

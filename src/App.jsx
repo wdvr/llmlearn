@@ -442,6 +442,10 @@ function App() {
 
   return (
     <div className={`app ${navOpen ? 'nav-open' : ''}`}>
+      {/* Skip-to-content link for keyboard / screen-reader users — hidden
+          off-screen until focused. */}
+      <a href="#main-content" className="skip-link">Skip to main content</a>
+
       {/* Mobile top bar */}
       <header className="mobile-topbar">
         <button
@@ -705,7 +709,7 @@ function App() {
       )}
 
       {/* Main content */}
-      <main className="main">
+      <main className="main" id="main-content" tabIndex={-1}>
         <Suspense fallback={<RouteFallback />}>
           <Routes>
             <Route
