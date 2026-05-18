@@ -47,9 +47,22 @@ function readStorage(key, fallback) {
   } catch { return fallback }
 }
 
+// Auth subdomain matching the current TLD so resulting cookies are visible
+// to this site. (Cross-TLD cookies don't exist — each TLD needs its own auth.)
+function authBaseForHost() {
+  if (typeof window === 'undefined') return 'auth.thelittleone.rocks'
+  return window.location.hostname.endsWith('.wdvr.dev')
+    ? 'auth.wdvr.dev'
+    : 'auth.thelittleone.rocks'
+}
+
 function App() {
   const location = useLocation()
   const navigate = useNavigate()
+  const authHost = authBaseForHost()
+  const origin = (typeof window !== 'undefined' ? window.location.origin : 'https://llm.thelittleone.rocks') + '/'
+  const signInHref = `https://${authHost}/oauth2/start?rd=${encodeURIComponent(origin)}`
+  const signOutHref = `/oauth2/sign_out?rd=https://${authHost}/oauth2/sign_out?rd=${encodeURIComponent(origin)}`
   const [completed, setCompleted] = useState(() => readStorage('completed', []))
   const [chatOpen, setChatOpen] = useState(false)
   const [navOpen, setNavOpen] = useState(false)
@@ -688,7 +701,7 @@ function App() {
             </div>
           ) : (
             <a
-              href="https://auth.thelittleone.rocks/oauth2/start?rd=https://llm.thelittleone.rocks/"
+              href={signInHref}
               className="footer-sync footer-sync-cta"
               title="Your progress is saved only in this browser. Sign in to sync across devices and unlock the chat."
             >
@@ -709,15 +722,9 @@ function App() {
             </button>
             <span className="footer-build">{__COMMIT_HASH__} · v{__BUILD_NUM__}</span>
             {syncUser ? (
-              <a
-                href="/oauth2/sign_out?rd=https://auth.thelittleone.rocks/oauth2/sign_out?rd=https://llm.thelittleone.rocks"
-                className="footer-logout"
-              >logout</a>
+              <a href={signOutHref} className="footer-logout">logout</a>
             ) : (
-              <a
-                href="https://auth.thelittleone.rocks/oauth2/start?rd=https://llm.thelittleone.rocks/"
-                className="footer-logout"
-              >sign in</a>
+              <a href={signInHref} className="footer-logout">sign in</a>
             )}
           </div>
         </div>

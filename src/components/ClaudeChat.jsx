@@ -14,7 +14,15 @@ export default function ClaudeChat({ isOpen, onClose, appContext, signedIn }) {
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
 
-  const signInUrl = 'https://auth.thelittleone.rocks/oauth2/start?rd=https://llm.thelittleone.rocks/'
+  // Pick the auth subdomain that matches the current top-level domain so
+  // the resulting cookie is actually visible to this site. (Cookies don't
+  // cross TLDs — a .thelittleone.rocks cookie isn't readable on .wdvr.dev,
+  // so each TLD needs its own auth.<tld>/oauth2/callback.)
+  const authHost = typeof window !== 'undefined' && window.location.hostname.endsWith('.wdvr.dev')
+    ? 'auth.wdvr.dev'
+    : 'auth.thelittleone.rocks'
+  const returnTo = typeof window !== 'undefined' ? window.location.origin + '/' : 'https://llm.thelittleone.rocks/'
+  const signInUrl = `https://${authHost}/oauth2/start?rd=${encodeURIComponent(returnTo)}`
 
   // Persist messages
   useEffect(() => {
