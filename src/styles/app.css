@@ -2806,22 +2806,64 @@ code, pre {
 }
 
 /* Top-of-page reading progress bar — thin colored fill that grows as the user
-   scrolls. Fixed to viewport top so it's visible regardless of scroll. */
+   scrolls. Click anywhere on the bar to jump to that percentage of the page. */
 .scroll-progress-bar {
   position: fixed;
   top: 0;
   left: var(--sidebar-w);
   right: 0;
-  height: 3px;
+  height: 6px;
   background: transparent;
   z-index: 15;
   pointer-events: none;
 }
+.scroll-progress-bar-interactive {
+  pointer-events: auto;
+  cursor: pointer;
+  /* Larger hit area than the visual bar — the visible 3px gets centered
+     within the 6px clickable region. */
+}
+.scroll-progress-bar-interactive::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.05);
+  transition: background 0.15s;
+}
+.scroll-progress-bar-interactive:hover::before {
+  background: rgba(255, 255, 255, 0.12);
+}
 .scroll-progress-fill {
-  height: 100%;
+  position: absolute;
+  top: 2px;
+  left: 0;
+  height: 3px;
   background: linear-gradient(90deg, var(--accent), var(--purple));
   transition: width 0.08s linear;
   box-shadow: 0 0 8px rgba(88, 166, 255, 0.35);
+}
+.scroll-progress-handle {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 7px;
+  background: var(--purple);
+  transform: translateX(-1px);
+  border-radius: 1px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.scroll-progress-bar-interactive:hover .scroll-progress-handle,
+.scroll-progress-bar-interactive:focus-visible .scroll-progress-handle {
+  opacity: 1;
+}
+.scroll-progress-bar-interactive:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-radius: 2px;
 }
 @media (max-width: 768px) {
   .scroll-progress-bar {

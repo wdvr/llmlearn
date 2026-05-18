@@ -698,14 +698,37 @@ export default function ModulePage({
   return (
     <div className="content">
       <div
-        className="scroll-progress-bar"
-        role="progressbar"
-        aria-label="Reading progress"
+        className="scroll-progress-bar scroll-progress-bar-interactive"
+        role="slider"
+        aria-label="Reading progress — click to jump"
         aria-valuenow={Math.round(scrollProgress)}
         aria-valuemin={0}
         aria-valuemax={100}
+        tabIndex={0}
+        onClick={(e) => {
+          const rect = e.currentTarget.getBoundingClientRect()
+          const pct = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width))
+          const docH = document.documentElement.scrollHeight - window.innerHeight
+          if (docH > 0) window.scrollTo({ top: pct * docH, behavior: 'smooth' })
+        }}
+        onKeyDown={(e) => {
+          // Arrow keys / Home / End scrub the page like a slider.
+          const docH = document.documentElement.scrollHeight - window.innerHeight
+          if (docH <= 0) return
+          const step = window.innerHeight * 0.5
+          if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+            e.preventDefault(); window.scrollBy({ top: step, behavior: 'smooth' })
+          } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+            e.preventDefault(); window.scrollBy({ top: -step, behavior: 'smooth' })
+          } else if (e.key === 'Home') {
+            e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' })
+          } else if (e.key === 'End') {
+            e.preventDefault(); window.scrollTo({ top: docH, behavior: 'smooth' })
+          }
+        }}
       >
         <div className="scroll-progress-fill" style={{ width: `${scrollProgress}%` }} />
+        <div className="scroll-progress-handle" style={{ left: `${scrollProgress}%` }} aria-hidden="true" />
       </div>
       {course && (
         <nav className="breadcrumb" aria-label="Breadcrumb">
