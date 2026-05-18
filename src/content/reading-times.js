@@ -25,6 +25,7 @@ export const readingTimes = {
   'moe-mla': 35,
   'mps-ane-coreml-profiling': 22,
   'mps-apple-gpu-architecture': 15,
+  'mps-flash-attention': 13,
   'mps-metal-shaders': 27,
   'mps-mlx-framework': 24,
   'mps-tensor-fundamentals': 19,

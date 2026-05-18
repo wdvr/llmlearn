@@ -75,6 +75,25 @@ export const modules = [
     ],
     loader: () => import('./mps-modules/mps05-ane-coreml-profiling.json'),
   },
+  {
+    id: 'mps-flash-attention',
+    title: 'Flash Attention on Apple Silicon',
+    description: 'Why naïve attention dies at long context, how Flash Attention\'s tiling rewrites it to fit in fast on-chip memory, and what\'s specific to MPS — kernel paths in PyTorch, MLX\'s flash attention, and the limits of porting CUDA-style flash to Metal.',
+    sections: [
+      { title: 'Why Naïve Attention Hits a Wall' },
+      { title: 'The Flash Attention Idea — Tiled Online Softmax' },
+      { title: 'Where Flash Attention Lives in PyTorch' },
+      { title: 'MLX\'s Flash Attention' },
+      { title: 'What\'s Different on Metal vs CUDA' },
+      { title: 'Pitfalls and Practical Recipes' },
+    ],
+    loader: () => import('./mps-modules/mps06-flash-attention-mps.json'),
+    relatedModules: [
+      { id: 'attention-deeper', note: 'KV cache + multi-head attention from the PyTorch course.' },
+      { id: 'qkv-deep-dive', note: 'Q/K/V fundamentals — Flash optimizes this exact mechanism.' },
+      { id: 'mps-mlx-framework', note: 'MLX\'s lazy graph + native fast.scaled_dot_product_attention.' },
+    ],
+  },
 ]
 
 // Cache for full module content keyed by module id.
