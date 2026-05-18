@@ -399,6 +399,25 @@ code, pre {
 .sync-dot.sync-syncing { background: var(--accent); animation: pulse 1s ease-in-out infinite; }
 .sync-dot.sync-error { background: var(--red); box-shadow: 0 0 0 2px rgba(248, 81, 73, 0.15); }
 .sync-label { letter-spacing: 0.3px; }
+a.footer-sync-cta {
+  text-decoration: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 2px 4px;
+  margin-left: -4px;
+  transition: color 0.15s, background 0.15s;
+}
+a.footer-sync-cta:hover,
+a.footer-sync-cta:focus-visible {
+  color: var(--accent);
+  background: rgba(88, 166, 255, 0.08);
+}
+a.footer-sync-cta:hover .sync-dot.sync-local,
+a.footer-sync-cta:focus-visible .sync-dot.sync-local {
+  opacity: 0.9;
+  background: var(--accent);
+}
 @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.4 } }
 
 .footer-meta {
@@ -3105,11 +3124,18 @@ code, pre {
 }
 
 /* Module header meta line: ⏱ N min read · M sections · K quiz q's */
+.module-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 14px;
+}
 .module-meta {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 14px;
   font-size: 12px;
   color: var(--text-muted);
   font-weight: 500;
@@ -3120,6 +3146,74 @@ code, pre {
 }
 .module-meta-sep {
   opacity: 0.5;
+}
+
+/* Manual bookmark button — top-right of the module header, lets the user
+   pin their current scroll position explicitly. Companion to the
+   auto-save-on-scroll behavior. */
+.module-bookmark-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.module-bookmark-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: var(--bg-tertiary, rgba(255,255,255,0.04));
+  border: 1px solid var(--border, rgba(255,255,255,0.08));
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.module-bookmark-btn:hover,
+.module-bookmark-btn:focus-visible {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: rgba(88, 166, 255, 0.08);
+}
+.module-bookmark-btn.has-bookmark {
+  color: var(--text);
+  border-color: rgba(88, 166, 255, 0.4);
+  background: rgba(88, 166, 255, 0.06);
+}
+.module-bookmark-btn.flash {
+  color: var(--green, #3fb950);
+  border-color: var(--green, #3fb950);
+  background: rgba(63, 185, 80, 0.10);
+}
+.module-bookmark-icon {
+  font-size: 13px;
+  line-height: 1;
+}
+.module-bookmark-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 220px;
+}
+.module-bookmark-clear {
+  font-size: 11px;
+  padding: 4px 8px;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.module-bookmark-clear:hover,
+.module-bookmark-clear:focus-visible {
+  color: var(--red, #f85149);
+  border-color: rgba(248, 81, 73, 0.4);
 }
 
 /* Resume-reading bookmark banner */
@@ -4135,4 +4229,109 @@ code, pre {
 .main:focus,
 .main:focus-visible {
   outline: none;
+}
+
+/* ============================================================
+   Print stylesheet — save-as-PDF or paper-print of a module.
+   Strip chrome (sidebar, chat, scroll bar, mobile topbar, module
+   nav, breadcrumb) and let the content fill the page.
+   Code blocks should not be cut mid-line.
+   ============================================================ */
+@media print {
+  :root {
+    --page-margin: 18mm;
+  }
+  html, body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  /* Hide all non-content UI */
+  .sidebar,
+  .nav-backdrop,
+  .mobile-topbar,
+  .chat-panel,
+  .chat-toggle,
+  .skip-link,
+  .scroll-progress-bar,
+  .module-nav,
+  .breadcrumb,
+  .resume-banner,
+  .cmdk-backdrop,
+  .kbd-modal,
+  .reading-time-bar,
+  .module-progress-pill,
+  .copy-link-btn,
+  .copy-code-btn,
+  .glossary-popover,
+  .exercise-runner,
+  .scratch-panel,
+  .recent-section,
+  .resume-card,
+  .recent-card,
+  .hero-cta-row,
+  .nav-subsections,
+  .font-controls,
+  .module-meta-pills,
+  .related-modules,
+  .footer-actions {
+    display: none !important;
+  }
+  /* Reset layout so the main column fills the page */
+  .app, .main, .content {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: auto !important;
+    max-width: 100% !important;
+  }
+  .content {
+    font-size: 11pt;
+    line-height: 1.55;
+    color: #111 !important;
+  }
+  h1, h2, h3, h4 {
+    color: #000 !important;
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+  a { color: #000 !important; text-decoration: underline; }
+  a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-size: 9pt;
+    color: #555;
+  }
+  /* Don't trail external URLs after in-app or anchor links */
+  a[href^="#"]::after,
+  a[href^="/"]::after,
+  a[href^="."]::after { content: ""; }
+  pre, code {
+    background: #f4f4f4 !important;
+    color: #111 !important;
+    border: 1px solid #ddd !important;
+  }
+  pre {
+    page-break-inside: avoid;
+    break-inside: avoid;
+    white-space: pre-wrap !important;
+    word-wrap: break-word !important;
+    overflow: visible !important;
+    font-size: 9.5pt;
+  }
+  img, svg, .mermaid {
+    max-width: 100% !important;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  table { page-break-inside: avoid; }
+  /* Section-level grouping — keep headings with first paragraph */
+  .module-section { page-break-inside: auto; }
+  .module-section h3 + p { page-break-before: avoid; }
+  /* Hide quiz and exercise — they aren't usable on paper */
+  .quiz, .exercise, .local-exercise, .colab-exercise {
+    display: none !important;
+  }
+  @page {
+    size: A4;
+    margin: var(--page-margin);
+  }
 }

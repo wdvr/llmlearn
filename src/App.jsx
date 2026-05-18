@@ -380,18 +380,23 @@ function App() {
   }
 
   // Save the user's current scroll position for a module. Called from ModulePage
-  // on debounced scroll. Skipped when the position is near the top of the page
-  // — no need to clutter sync with "you started reading" entries.
-  const saveScrollPosition = (moduleId, scroll, sectionTitle) => {
+  // on debounced scroll (auto-save) and from the manual "Bookmark here" button.
+  // Auto-save is skipped when the position is near the top of the page — no
+  // need to clutter sync with "you started reading" entries. Manual saves
+  // bypass that threshold by passing { force: true }.
+  const saveScrollPosition = (moduleId, scroll, sectionTitle, opts) => {
     if (!moduleId) return
-    if (scroll < 200) {
-      // Below threshold: don't save. If a bookmark already exists, leave it
-      // alone — the user might have come back and scrolled to the top briefly.
+    if (!opts?.force && scroll < 200) {
       return
     }
     setScrollPositions(prev => ({
       ...prev,
-      [moduleId]: { scroll: Math.round(scroll), sectionTitle: sectionTitle || null, ts: Date.now() },
+      [moduleId]: {
+        scroll: Math.round(scroll),
+        sectionTitle: sectionTitle || null,
+        ts: Date.now(),
+        manual: !!opts?.force,
+      },
     }))
   }
 
@@ -671,14 +676,26 @@ function App() {
               aria-label="Reset all progress"
             >Reset</button>
           </div>
-          <div className="footer-sync" title={syncUser ? `Synced as ${syncUser}` : 'Progress saved locally only (sign in to sync across devices)'}>
-            <span className={`sync-dot sync-${syncStatus} ${syncUser ? 'synced' : 'local'}`} aria-hidden="true" />
-            <span className="sync-label">
-              {syncUser
-                ? (syncStatus === 'syncing' ? 'Syncing…' : syncStatus === 'error' ? 'Sync error' : 'Synced')
-                : 'Local only'}
-            </span>
-          </div>
+          {syncUser ? (
+            <div
+              className="footer-sync"
+              title={`Progress is syncing across devices as ${syncUser}`}
+            >
+              <span className={`sync-dot sync-${syncStatus} synced`} aria-hidden="true" />
+              <span className="sync-label">
+                {syncStatus === 'syncing' ? 'Syncing…' : syncStatus === 'error' ? 'Sync error' : 'Synced'}
+              </span>
+            </div>
+          ) : (
+            <a
+              href="https://auth.thelittleone.rocks/oauth2/start?rd=https://llm.thelittleone.rocks/"
+              className="footer-sync footer-sync-cta"
+              title="Your progress is saved only in this browser. Sign in to sync across devices and unlock the chat."
+            >
+              <span className="sync-dot sync-local" aria-hidden="true" />
+              <span className="sync-label">Local only · sign in to sync</span>
+            </a>
+          )}
           <div className="footer-meta">
             <button
               type="button"
@@ -691,10 +708,17 @@ function App() {
               <kbd>?</kbd>
             </button>
             <span className="footer-build">{__COMMIT_HASH__} · v{__BUILD_NUM__}</span>
-            <a
-              href="/oauth2/sign_out?rd=https://auth.thelittleone.rocks/oauth2/sign_out?rd=https://llm.thelittleone.rocks"
-              className="footer-logout"
-            >logout</a>
+            {syncUser ? (
+              <a
+                href="/oauth2/sign_out?rd=https://auth.thelittleone.rocks/oauth2/sign_out?rd=https://llm.thelittleone.rocks"
+                className="footer-logout"
+              >logout</a>
+            ) : (
+              <a
+                href="https://auth.thelittleone.rocks/oauth2/start?rd=https://llm.thelittleone.rocks/"
+                className="footer-logout"
+              >sign in</a>
+            )}
           </div>
         </div>
       </nav>
@@ -762,7 +786,7 @@ function App() {
 
       {/* Claude Chat */}
       <Suspense fallback={null}>
-        <ClaudeChat isOpen={chatOpen} onClose={() => setChatOpen(false)} appContext={appContext} />
+        <ClaudeChat isOpen={chatOpen} onClose={() => setChatOpen(false)} appContext={appContext} signedIn={!!syncUser} />
       </Suspense>
       <button
         className={`chat-toggle ${chatHidden && !chatOpen ? 'chat-toggle-hidden' : ''}`}

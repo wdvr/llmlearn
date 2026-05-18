@@ -37,7 +37,9 @@ function parseInline(text, keyPrefix) {
 
     const k = keyPrefix + (key++)
     if (next === bold) {
-      tokens.push(<strong key={k} style={{ color: 'var(--accent)', fontWeight: 600 }}>{bold[1]}</strong>)
+      // Plain bold — accent color is reserved for glossary-linked terms in
+      // ModulePage, so blue consistently means "clickable".
+      tokens.push(<strong key={k} style={{ fontWeight: 600 }}>{bold[1]}</strong>)
     } else if (next === code) {
       tokens.push(<code key={k} style={{
         background: 'var(--bg-tertiary)', padding: '1px 5px', borderRadius: '3px',

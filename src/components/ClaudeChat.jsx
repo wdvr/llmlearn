@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 
-export default function ClaudeChat({ isOpen, onClose, appContext }) {
+export default function ClaudeChat({ isOpen, onClose, appContext, signedIn }) {
   const [messages, setMessages] = useState(() => {
     try {
       const saved = JSON.parse(localStorage.getItem('chat_history') || '[]')
@@ -272,10 +272,48 @@ export default function ClaudeChat({ isOpen, onClose, appContext }) {
       </div>
 
       <div className="chat-messages">
-        {messages.length === 0 && !needsAuth && (
+        {messages.length === 0 && !needsAuth && signedIn !== false && (
           <div className="chat-msg system">
             Ask me anything about PyTorch, LLM architecture, or MPS.
             I know which module you're on and adapt my answers.
+          </div>
+        )}
+        {messages.length === 0 && signedIn === false && !needsAuth && (
+          <div
+            className="chat-msg system"
+            style={{
+              padding: '16px',
+              border: '1px solid var(--border)',
+              borderRadius: '8px',
+              background: 'var(--bg-tertiary)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
+              alignItems: 'flex-start'
+            }}
+          >
+            <div style={{ fontWeight: 600, color: 'var(--text)' }}>
+              Please sign in to chat
+            </div>
+            <div style={{ color: 'var(--text-muted)', fontSize: '13px', lineHeight: 1.5 }}>
+              The chat is gated behind sign-in. After signing in you'll come
+              back here and your progress will sync across devices too.
+            </div>
+            <a
+              href={signInUrl}
+              style={{
+                display: 'inline-block',
+                background: 'var(--accent)',
+                color: 'white',
+                padding: '8px 16px',
+                borderRadius: '6px',
+                textDecoration: 'none',
+                fontWeight: 600,
+                fontSize: '13px'
+              }}
+            >
+              Sign in
+            </a>
           </div>
         )}
         {messages.map((msg, i) => (
@@ -336,16 +374,19 @@ export default function ClaudeChat({ isOpen, onClose, appContext }) {
           <textarea
             ref={inputRef}
             className="chat-input"
-            placeholder={`Ask about ${contextLabel.toLowerCase()}...`}
+            placeholder={signedIn === false
+              ? 'Sign in to chat'
+              : `Ask about ${contextLabel.toLowerCase()}...`}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             rows={2}
+            disabled={signedIn === false}
           />
           <button
             className="chat-send"
             onClick={sendMessage}
-            disabled={loading || !input.trim()}
+            disabled={loading || !input.trim() || signedIn === false}
           >
             Send
           </button>

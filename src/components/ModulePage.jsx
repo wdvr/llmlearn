@@ -518,11 +518,12 @@ function inlineMarkdown(text, linkifiedSlugs) {
     if (next === bold) {
       const inner = bold[1];
       const entry = lookupGlossaryTerm(inner);
-      if (entry && linkifiedSlugs && !linkifiedSlugs.has(entry.slug)) {
-        linkifiedSlugs.add(entry.slug);
-        // Wrap link in a span so we can sibling-position a hover popover
-        // that shows the definition inline (desktop hover, keyboard focus).
-        // The href still works for click/tap, jumping to /#/glossary#slug.
+      if (entry) {
+        // Every glossary-matched bold is clickable + hoverable, so visual
+        // styling (blue) consistently signals "this is a link." Previously we
+        // only linkified the first occurrence per section, which left
+        // identical-looking blue spans that were inert on hover — confusing.
+        if (linkifiedSlugs) linkifiedSlugs.add(entry.slug);
         tokens.push(
           <span key={key++} className="glossary-link-wrap">
             <a
@@ -538,7 +539,9 @@ function inlineMarkdown(text, linkifiedSlugs) {
           </span>
         );
       } else {
-        tokens.push(<strong key={key++} style={{ color: 'var(--accent)', fontWeight: 600 }}>{inner}</strong>);
+        // No glossary entry → plain bold (no accent color) so the user can
+        // tell at a glance which bolds are clickable.
+        tokens.push(<strong key={key++} style={{ fontWeight: 600 }}>{inner}</strong>);
       }
     } else if (next === code) {
       tokens.push(<code key={key++} style={{
@@ -592,6 +595,11 @@ export default function ModulePage({
 
   // Scroll progress (0..100) shown as a thin bar at the top of the page.
   const [scrollProgress, setScrollProgress] = useState(0)
+
+  // Transient feedback for the manual "Bookmark here" button. Flips true
+  // for ~1.5s after the user clicks, then back to false. We render a "✓
+  // saved" affordance during that window so the click feels confirmed.
+  const [bookmarkFlash, setBookmarkFlash] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -818,20 +826,64 @@ export default function ModulePage({
       <div className="module-header">
         <h2>{module.title}</h2>
         <p>{module.description}</p>
-        {readingMinutes && (
-          <div className="module-meta" aria-label={`Estimated reading time ${readingMinutes} minutes`}>
-            <span className="module-meta-icon" aria-hidden="true">⏱</span>
-            <span>{readingMinutes} min read</span>
-            <span className="module-meta-sep" aria-hidden="true">·</span>
-            <span>{module.sections.length} sections</span>
-            {module.quiz && (
-              <>
-                <span className="module-meta-sep" aria-hidden="true">·</span>
-                <span>{module.quiz.length} quiz q's</span>
-              </>
-            )}
-          </div>
-        )}
+        <div className="module-meta-row">
+          {readingMinutes && (
+            <div className="module-meta" aria-label={`Estimated reading time ${readingMinutes} minutes`}>
+              <span className="module-meta-icon" aria-hidden="true">⏱</span>
+              <span>{readingMinutes} min read</span>
+              <span className="module-meta-sep" aria-hidden="true">·</span>
+              <span>{module.sections.length} sections</span>
+              {module.quiz && (
+                <>
+                  <span className="module-meta-sep" aria-hidden="true">·</span>
+                  <span>{module.quiz.length} quiz q's</span>
+                </>
+              )}
+            </div>
+          )}
+          {(() => {
+            const saved = scrollPositions?.[id]
+            const hasBookmark = saved && typeof saved.scroll === 'number' && saved.scroll > 0
+            return (
+              <div className="module-bookmark-controls">
+                <button
+                  type="button"
+                  className={`module-bookmark-btn ${bookmarkFlash ? 'flash' : ''} ${hasBookmark ? 'has-bookmark' : ''}`}
+                  onClick={() => {
+                    const y = window.scrollY || document.documentElement.scrollTop || 0
+                    onSaveScrollPosition?.(id, y, currentSectionRef.current, { force: true })
+                    setBookmarkFlash(true)
+                    setTimeout(() => setBookmarkFlash(false), 1500)
+                  }}
+                  title={hasBookmark
+                    ? (saved.sectionTitle
+                        ? `Bookmark currently at "${saved.sectionTitle}". Click to update to your current position.`
+                        : 'Bookmark saved. Click to update to your current position.')
+                    : 'Save your current scroll position. Resume from here next time.'}
+                  aria-label={hasBookmark ? 'Update bookmark to current position' : 'Bookmark this position'}
+                >
+                  <span className="module-bookmark-icon" aria-hidden="true">{bookmarkFlash ? '✓' : '📍'}</span>
+                  <span className="module-bookmark-label">
+                    {bookmarkFlash
+                      ? 'Bookmarked'
+                      : hasBookmark
+                        ? (saved.sectionTitle ? `at "${saved.sectionTitle}"` : 'Update bookmark')
+                        : 'Bookmark here'}
+                  </span>
+                </button>
+                {hasBookmark && !bookmarkFlash && (
+                  <button
+                    type="button"
+                    className="module-bookmark-clear"
+                    onClick={() => onClearScrollPosition?.(id)}
+                    title="Clear the saved bookmark for this module"
+                    aria-label="Clear bookmark"
+                  >Clear</button>
+                )}
+              </div>
+            )
+          })()}
+        </div>
       </div>
 
       {showResumeBanner && initialBookmark.current && (
