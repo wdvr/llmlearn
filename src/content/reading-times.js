@@ -33,6 +33,7 @@ export const readingTimes = {
   'nn-module-training': 43,
   'qkv-deep-dive': 26,
   'rl-policy-gradient-ppo': 16,
+  'rl-rlhf-dpo': 20,
   'rl-snake': 37,
   'tensors-devices': 17,
   'tiny-transformer': 24,

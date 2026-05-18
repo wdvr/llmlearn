@@ -45,6 +45,26 @@ export const modules = [
       { id: 'attention-deeper', note: 'The LM that RLHF fine-tunes on top of.' },
     ],
   },
+  {
+    id: 'rl-rlhf-dpo',
+    title: 'RLHF & DPO — Aligning LLMs with Human Preferences',
+    description: 'How a pretrained LLM becomes a helpful assistant. The full RLHF pipeline (SFT → reward model → PPO + KL), the math of preference data, and why DPO skipped the RL part entirely without losing quality. Plus where the field is moving (GRPO, RLAIF, Constitutional AI).',
+    sections: [
+      { title: 'Why Pretraining Isn\'t Enough' },
+      { title: 'The RLHF Pipeline End-to-End' },
+      { title: 'Reward Modeling — The Quiet Bottleneck' },
+      { title: 'DPO — The Math Trick' },
+      { title: 'DPO Variants and Newer Approaches' },
+      { title: 'When to Use What — A Practitioner\'s Cheat Sheet' },
+      { title: 'The Limits of Alignment' },
+    ],
+    loader: () => import('./modules/rl03-rlhf-dpo.json'),
+    relatedModules: [
+      { id: 'rl-policy-gradient-ppo', note: 'PPO is the RL engine RLHF runs on top of.' },
+      { id: 'training-inference-details', note: 'SFT (the supervised stage that comes before preference tuning).' },
+      { id: 'modern-llm-arch', note: 'The model architecture being aligned.' },
+    ],
+  },
 ]
 
 // Cache for full module content keyed by module id.
