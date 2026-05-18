@@ -15,6 +15,7 @@ import CodeBlock from './CodeBlock'
 import * as CudaDiagrams from './CudaDiagrams'
 import { findModuleCourse, findModule, loadModule } from '../content/courses'
 import { glossaryByTerm } from '../content/glossary'
+import { readingTimeFor } from '../content/reading-times'
 
 SyntaxHighlighter.registerLanguage('python', python)
 SyntaxHighlighter.registerLanguage('cpp', cpp)
@@ -558,8 +559,14 @@ export default function ModulePage({
     }
   }, [id, fullModule, onSaveScrollPosition])
 
-  // Reading-time estimate. Recomputed when the module content changes.
-  const readingMinutes = useMemo(() => estimateReadingMinutes(fullModule), [fullModule])
+  // Reading-time estimate. Prefer the pre-computed value (built once via
+  // scripts/compute-reading-times.py and bundled), fall back to on-the-fly
+  // estimation if the module isn't in the map (e.g., during local content
+  // editing before the script is re-run).
+  const readingMinutes = useMemo(
+    () => readingTimeFor(id) || estimateReadingMinutes(fullModule),
+    [id, fullModule]
+  )
 
   // Track which section is visible via IntersectionObserver
   useEffect(() => {

@@ -1610,11 +1610,27 @@ code, pre {
 
 .module-card-text {
   min-width: 0;
+  flex: 1;
+}
+.module-card-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  justify-content: space-between;
 }
 .module-card-text h4 {
   font-size: 15px;
   font-weight: 600;
   margin-bottom: 2px;
+}
+.module-card-time {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex-shrink: 0;
+  opacity: 0.85;
 }
 
 .module-card-text p {

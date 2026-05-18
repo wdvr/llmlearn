@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, Suspense } from 'react'
 import { Routes, Route, Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { courses, allModules, findCourse, findModuleCourse } from './content/courses'
+import { readingTimeFor } from './content/reading-times'
 
 const ModulePage = React.lazy(() => import('./components/ModulePage'))
 const PRReview = React.lazy(() => import('./components/PRReview'))
@@ -804,21 +805,31 @@ function CoursePage({ courses, completed }) {
       )}
 
       <div className="module-cards">
-        {course.modules.map((mod, i) => (
-          <Link
-            key={mod.id}
-            to={`/module/${mod.id}`}
-            className={`module-card ${completed.includes(mod.id) ? 'completed' : ''}`}
-          >
-            <div className="module-num" style={{ color: course.color }}>
-              {completed.includes(mod.id) ? '✓' : i + 1}
-            </div>
-            <div className="module-card-text">
-              <h4>{mod.title}</h4>
-              <p>{mod.description}</p>
-            </div>
-          </Link>
-        ))}
+        {course.modules.map((mod, i) => {
+          const minutes = readingTimeFor(mod.id)
+          return (
+            <Link
+              key={mod.id}
+              to={`/module/${mod.id}`}
+              className={`module-card ${completed.includes(mod.id) ? 'completed' : ''}`}
+            >
+              <div className="module-num" style={{ color: course.color }}>
+                {completed.includes(mod.id) ? '✓' : i + 1}
+              </div>
+              <div className="module-card-text">
+                <div className="module-card-title-row">
+                  <h4>{mod.title}</h4>
+                  {minutes && (
+                    <span className="module-card-time" aria-label={`${minutes} minute read`}>
+                      <span aria-hidden="true">⏱</span> {minutes} min
+                    </span>
+                  )}
+                </div>
+                <p>{mod.description}</p>
+              </div>
+            </Link>
+          )
+        })}
 
         {course.curatedPRs && course.curatedPRs.length > 0 && (
           <Link to="/prs" className="module-card module-card-tool">
