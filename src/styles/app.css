@@ -2086,6 +2086,81 @@ code, pre {
   transform: translateX(2px);
 }
 
+/* "Recently studied" list on the landing page — shows up to 4 module
+   shortcuts under the Resume CTA. Helps regulars jump back without scrolling
+   through the courses grid. */
+.recent-section {
+  margin-bottom: 24px;
+}
+.recent-section .section-heading {
+  margin-top: 4px;
+  margin-bottom: 10px;
+}
+.recent-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+@media (min-width: 720px) {
+  .recent-list { grid-template-columns: repeat(2, 1fr); }
+}
+.recent-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--course-color, var(--accent));
+  border-radius: 8px;
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.15s, transform 0.15s, border-color 0.15s;
+}
+.recent-card:hover {
+  background: var(--bg-hover);
+  border-color: var(--course-color, var(--accent));
+  transform: translateX(2px);
+}
+.recent-icon {
+  font-size: 18px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.recent-text {
+  flex: 1;
+  min-width: 0;
+}
+.recent-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.recent-check {
+  color: var(--green);
+  font-weight: 700;
+}
+.recent-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.recent-arrow {
+  font-size: 13px;
+  color: var(--text-muted);
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+.recent-card:hover .recent-arrow {
+  color: var(--course-color, var(--accent));
+  opacity: 1;
+}
+
 /* 404 / Not-found page — also used for missing courses/modules */
 .notfound {
   text-align: center;

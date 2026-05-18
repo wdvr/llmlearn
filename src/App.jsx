@@ -37,6 +37,7 @@ function App() {
   })
   const [quizScores, setQuizScores] = useState(() => readStorage('quiz_scores', {}))
   const [lastVisited, setLastVisited] = useState(() => readStorage('last_visited', null))
+  const [recentlyVisited, setRecentlyVisited] = useState(() => readStorage('recently_visited', []))
   const [scrollPositions, setScrollPositions] = useState(() => readStorage('scroll_positions', {}))
   const [currentSection, setCurrentSection] = useState(null)
   const [syncUser, setSyncUser] = useState(null)
@@ -115,6 +116,20 @@ function App() {
             }
           }
 
+          // Recently-visited list: merge by moduleId, keep latest ts per id,
+          // sort desc, cap at 10.
+          if (Array.isArray(data.recentlyVisited)) {
+            const byId = new Map()
+            for (const e of [...recentlyVisited, ...data.recentlyVisited]) {
+              if (!e?.moduleId || typeof e.ts !== 'number') continue
+              const cur = byId.get(e.moduleId)
+              if (!cur || e.ts > cur.ts) byId.set(e.moduleId, e)
+            }
+            const merged = [...byId.values()].sort((a, b) => b.ts - a.ts).slice(0, 10)
+            setRecentlyVisited(merged)
+            try { localStorage.setItem('recently_visited', JSON.stringify(merged)) } catch {}
+          }
+
           // Scroll positions: per-module latest-ts wins.
           if (data.scrollPositions && typeof data.scrollPositions === 'object') {
             const mergedPos = { ...scrollPositions }
@@ -134,10 +149,11 @@ function App() {
             completed,
             quizScores,
             lastVisited,
+            recentlyVisited,
             scrollPositions,
             schema_version: STORAGE_VERSION,
           }
-          if (snapshot.completed.length > 0 || Object.keys(snapshot.quizScores).length > 0 || Object.keys(snapshot.scrollPositions).length > 0) {
+          if (snapshot.completed.length > 0 || Object.keys(snapshot.quizScores).length > 0 || Object.keys(snapshot.scrollPositions).length > 0 || (snapshot.recentlyVisited && snapshot.recentlyVisited.length > 0)) {
             await fetch('/api/progress', {
               method: 'POST',
               credentials: 'include',
@@ -185,7 +201,7 @@ function App() {
       }
     }, 800)
     return () => clearTimeout(syncTimer.current)
-  }, [completed, quizScores, lastVisited, scrollPositions, syncUser])
+  }, [completed, quizScores, lastVisited, recentlyVisited, scrollPositions, syncUser])
 
   // Derive active course from URL
   const activeCourse = useMemo(() => {
@@ -250,13 +266,22 @@ function App() {
     localStorage.setItem('font_size', fontSize.toString())
   }, [fontSize])
 
-  // Track last-visited module for the "Resume" CTA on the landing page.
+  // Track last-visited module + a rolling recent-history list. The single
+  // "lastVisited" stays for the top-of-page Resume CTA; "recentlyVisited"
+  // is a deduped list (most-recent-first, max 10) used to populate the
+  // "Continue learning" section under the resume card.
   useEffect(() => {
-    if (activeModule) {
-      const entry = { moduleId: activeModule.id, ts: Date.now() }
-      setLastVisited(entry)
-      try { localStorage.setItem('last_visited', JSON.stringify(entry)) } catch {}
-    }
+    if (!activeModule) return
+    const ts = Date.now()
+    const entry = { moduleId: activeModule.id, ts }
+    setLastVisited(entry)
+    try { localStorage.setItem('last_visited', JSON.stringify(entry)) } catch {}
+    setRecentlyVisited(prev => {
+      const filtered = (prev || []).filter(e => e.moduleId !== activeModule.id)
+      const next = [entry, ...filtered].slice(0, 10)
+      try { localStorage.setItem('recently_visited', JSON.stringify(next)) } catch {}
+      return next
+    })
   }, [activeModule?.id])
 
   // Close mobile drawer on every navigation.
@@ -317,11 +342,13 @@ function App() {
     setCompleted([])
     setQuizScores({})
     setLastVisited(null)
+    setRecentlyVisited([])
     setScrollPositions({})
     try {
       localStorage.removeItem('completed')
       localStorage.removeItem('quiz_scores')
       localStorage.removeItem('last_visited')
+      localStorage.removeItem('recently_visited')
       localStorage.removeItem('scroll_positions')
     } catch {}
     // Also push the empty state to the server so the reset propagates to
@@ -332,7 +359,7 @@ function App() {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ data: { completed: [], quizScores: {}, lastVisited: null, scrollPositions: {}, schema_version: STORAGE_VERSION } }),
+        body: JSON.stringify({ data: { completed: [], quizScores: {}, lastVisited: null, recentlyVisited: [], scrollPositions: {}, schema_version: STORAGE_VERSION } }),
       }).catch(() => {})
     }
   }
@@ -594,6 +621,7 @@ function App() {
                   courses={courses}
                   completed={completed}
                   lastVisited={lastVisited}
+                  recentlyVisited={recentlyVisited}
                 />
               }
             />
@@ -655,7 +683,19 @@ function App() {
   )
 }
 
-function LandingPage({ courses, completed, lastVisited }) {
+function humanAgoShort(ms) {
+  if (ms < 60_000) return 'just now'
+  const min = Math.floor(ms / 60_000)
+  if (min < 60) return `${min}m ago`
+  const hr = Math.floor(min / 60)
+  if (hr < 24) return `${hr}h ago`
+  const day = Math.floor(hr / 24)
+  if (day < 30) return `${day}d ago`
+  const mo = Math.floor(day / 30)
+  return `${mo}mo ago`
+}
+
+function LandingPage({ courses, completed, lastVisited, recentlyVisited }) {
   const totalModules = courses.reduce((acc, c) => acc + c.modules.length, 0)
   const totalDone = courses.reduce(
     (acc, c) => acc + c.modules.filter(m => completed.includes(m.id)).length,
@@ -672,6 +712,26 @@ function LandingPage({ courses, completed, lastVisited }) {
     }
     return null
   }, [lastVisited, courses])
+
+  // Resolve up to 4 additional recently-visited modules (skipping the one
+  // already shown as the "Pick up where you left off" resume card).
+  const recentList = useMemo(() => {
+    if (!Array.isArray(recentlyVisited) || recentlyVisited.length === 0) return []
+    const skipId = resumeModule?.module?.id
+    const out = []
+    for (const entry of recentlyVisited) {
+      if (entry.moduleId === skipId) continue
+      for (const c of courses) {
+        const m = c.modules.find(x => x.id === entry.moduleId)
+        if (m) {
+          out.push({ module: m, course: c, ts: entry.ts })
+          break
+        }
+      }
+      if (out.length >= 4) break
+    }
+    return out
+  }, [recentlyVisited, courses, resumeModule])
 
   return (
     <div className="home">
@@ -711,6 +771,37 @@ function LandingPage({ courses, completed, lastVisited }) {
           </div>
           <div className="resume-cta">Resume →</div>
         </Link>
+      )}
+
+      {recentList.length > 0 && (
+        <section className="recent-section" aria-labelledby="recent-heading">
+          <h3 id="recent-heading" className="section-heading">Recently studied</h3>
+          <div className="recent-list">
+            {recentList.map(({ module, course, ts }) => {
+              const isCompleted = completed.includes(module.id)
+              return (
+                <Link
+                  key={module.id}
+                  to={`/module/${module.id}`}
+                  className="recent-card"
+                  style={{ '--course-color': course.color }}
+                >
+                  <span className="recent-icon" aria-hidden="true">{course.icon}</span>
+                  <div className="recent-text">
+                    <div className="recent-title">
+                      {isCompleted && <span className="recent-check" aria-hidden="true">✓ </span>}
+                      {module.title}
+                    </div>
+                    <div className="recent-meta">
+                      {course.title} · {humanAgoShort(Date.now() - ts)}
+                    </div>
+                  </div>
+                  <span className="recent-arrow" aria-hidden="true">→</span>
+                </Link>
+              )
+            })}
+          </div>
+        </section>
       )}
 
       <Link to="/scratch" className="scratch-card">
