@@ -727,6 +727,13 @@ function LandingPage({ courses, completed, lastVisited, recentlyVisited }) {
     0
   )
   const totalPct = totalModules ? Math.round((totalDone / totalModules) * 100) : 0
+  // Total reading minutes across every module on the site — gives users a
+  // sense of how much content is on offer.
+  const totalMinutes = courses.reduce(
+    (acc, c) => acc + (courseTotalMinutes(c) || 0),
+    0
+  )
+  const totalHours = Math.round(totalMinutes / 60)
 
   // Resolve last-visited module against the manifest so we can show its title.
   const resumeModule = useMemo(() => {
@@ -776,6 +783,12 @@ function LandingPage({ courses, completed, lastVisited, recentlyVisited }) {
             <div className="hero-stat-num">{totalModules}</div>
             <div className="hero-stat-label">modules</div>
           </div>
+          {totalHours > 0 && (
+            <div className="hero-stat">
+              <div className="hero-stat-num">~{totalHours}h</div>
+              <div className="hero-stat-label">content</div>
+            </div>
+          )}
           <div className="hero-stat">
             <div className="hero-stat-num">{totalPct}%</div>
             <div className="hero-stat-label">your progress</div>
@@ -787,7 +800,17 @@ function LandingPage({ courses, completed, lastVisited, recentlyVisited }) {
       </section>
 
       {resumeModule && (
-        <Link to={`/module/${resumeModule.module.id}`} className="resume-card">
+        <Link
+          to={`/module/${resumeModule.module.id}`}
+          className="resume-card"
+          onClick={() => {
+            // Signal to ModulePage that the user explicitly hit "Resume" so
+            // it should auto-scroll to the saved bookmark instead of starting
+            // at the top and prompting them. sessionStorage (not local) so it
+            // doesn't persist across browser sessions.
+            try { sessionStorage.setItem('auto_resume', resumeModule.module.id) } catch {}
+          }}
+        >
           <div className="resume-icon" style={{ color: resumeModule.course.color }} aria-hidden="true">↪</div>
           <div className="resume-text">
             <div className="resume-label">Pick up where you left off</div>

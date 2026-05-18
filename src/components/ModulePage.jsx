@@ -560,23 +560,49 @@ export default function ModulePage({
   // Use full content once loaded, fall back to manifest while pending.
   const module = fullModule || manifestModule
 
-  // On every module change, scroll to top and capture the existing bookmark
-  // (if any) so we can offer a "Resume from §X" affordance. We deliberately
-  // start at the top — users find it disorienting to land mid-page.
+  // On every module change, capture the existing bookmark (if any) so we
+  // can offer a "Resume from §X" affordance. Default: start at the top,
+  // show the banner, let the user decide.
   useEffect(() => {
-    window.scrollTo(0, 0)
     const saved = scrollPositions?.[id]
-    if (saved && typeof saved.scroll === 'number' && saved.scroll > 200) {
+    const hasBookmark = saved && typeof saved.scroll === 'number' && saved.scroll > 200
+    window.scrollTo(0, 0)
+    if (hasBookmark) {
       initialBookmark.current = saved
       setShowResumeBanner(true)
     } else {
       initialBookmark.current = null
       setShowResumeBanner(false)
     }
-    // We intentionally don't depend on scrollPositions — only re-capture on
-    // module change. Subsequent saves shouldn't re-show the banner.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
+
+  // If the user explicitly clicked the home-page "Resume" CTA, App stored
+  // the target module id in sessionStorage.auto_resume. Once the full
+  // module content has loaded (so the page has its real height), scroll
+  // directly to the saved position and dismiss the banner. The wait for
+  // `fullModule` is critical — scrolling before content loads clamps the
+  // offset against the short skeleton page.
+  useEffect(() => {
+    if (!fullModule) return
+    let resumeId
+    try { resumeId = sessionStorage.getItem('auto_resume') } catch {}
+    if (resumeId !== id) return
+    const saved = scrollPositions?.[id]
+    if (!saved || typeof saved.scroll !== 'number' || saved.scroll <= 200) {
+      try { sessionStorage.removeItem('auto_resume') } catch {}
+      return
+    }
+    try { sessionStorage.removeItem('auto_resume') } catch {}
+    // Allow one paint after content insert so scrollHeight is final.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: saved.scroll, behavior: 'auto' })
+        setShowResumeBanner(false)
+      })
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, fullModule])
 
   // Save scroll position as the user reads + update scroll-progress bar.
   // Two cadences: the progress bar updates immediately every scroll event for
