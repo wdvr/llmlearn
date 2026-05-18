@@ -8,6 +8,7 @@ const PRReview = React.lazy(() => import('./components/PRReview'))
 const ClaudeChat = React.lazy(() => import('./components/ClaudeChat'))
 const Scratch = React.lazy(() => import('./components/Scratch'))
 const Glossary = React.lazy(() => import('./components/Glossary'))
+const CommandPalette = React.lazy(() => import('./components/CommandPalette'))
 
 const RouteFallback = () => (
   <div className="content"><p>Loading...</p></div>
@@ -29,6 +30,7 @@ function App() {
   const [completed, setCompleted] = useState(() => readStorage('completed', []))
   const [chatOpen, setChatOpen] = useState(false)
   const [navOpen, setNavOpen] = useState(false)
+  const [cmdkOpen, setCmdkOpen] = useState(false)
   const [fontSize, setFontSize] = useState(() => {
     try { return parseInt(localStorage.getItem('font_size') || '15') } catch { return 15 }
   })
@@ -259,6 +261,20 @@ function App() {
   // Close mobile drawer on every navigation.
   useEffect(() => { setNavOpen(false) }, [location.pathname])
 
+  // Global Cmd/Ctrl-K opens the command palette. Skip when an editable
+  // element already has focus and the modifier isn't pressed (so plain 'k'
+  // in a code editor still types 'k').
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault()
+        setCmdkOpen(o => !o)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   const markComplete = (moduleId) => {
     if (!completed.includes(moduleId)) {
       setCompleted([...completed, moduleId])
@@ -360,6 +376,17 @@ function App() {
               <p>{activeCourse ? activeCourse.subtitle : 'GPU programming, end-to-end'}</p>
             </span>
           </Link>
+          <button
+            type="button"
+            className="sidebar-search"
+            onClick={() => setCmdkOpen(true)}
+            aria-label="Search (Cmd/Ctrl+K)"
+            title="Search modules, glossary, courses (Cmd/Ctrl+K)"
+          >
+            <span aria-hidden="true">🔍</span>
+            <span className="sidebar-search-label">Search</span>
+            <kbd className="sidebar-search-kbd">⌘K</kbd>
+          </button>
         </div>
 
         <div className="sidebar-nav">
@@ -617,6 +644,11 @@ function App() {
       >
         <span aria-hidden="true">💬</span>
       </button>
+
+      {/* Global Cmd/Ctrl-K command palette */}
+      <Suspense fallback={null}>
+        <CommandPalette open={cmdkOpen} onClose={() => setCmdkOpen(false)} />
+      </Suspense>
     </div>
   )
 }
