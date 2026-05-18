@@ -6,6 +6,8 @@ build_out/
 .deployed-commit
 dist/
 .DS_Store
+.env
+.env.local
 *.log
 node_modules/
 vite.config.js.timestamp-*

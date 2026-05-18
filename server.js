@@ -5,6 +5,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import Database from 'better-sqlite3';
+import nodemailer from 'nodemailer';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -41,10 +42,101 @@ try {
       updated_at INTEGER NOT NULL
     )
   `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS seen_users (
+      user_id TEXT PRIMARY KEY,
+      first_seen INTEGER NOT NULL,
+      last_seen INTEGER NOT NULL,
+      login_count INTEGER NOT NULL DEFAULT 1
+    )
+  `);
   console.log(`Progress DB ready at ${DB_PATH}`);
 } catch (err) {
   console.error('Progress DB unavailable — running without server-side sync:', err.message);
   db = null;
+}
+
+// =============================================================================
+// Login notifications
+// =============================================================================
+// On a user's first-ever sign-in we send an email to NOTIFY_EMAIL so the
+// admin (Wouter) knows when a new person joined. SMTP creds come from env
+// vars; if any are missing we still log the event to /data/logins.log so the
+// signal isn't lost.
+//
+// Required env for email sending:
+//   SMTP_HOST, SMTP_PORT (default 465), SMTP_USER, SMTP_PASS,
+//   SMTP_FROM (defaults to SMTP_USER), NOTIFY_EMAIL (recipient)
+// If SMTP_HOST is unset, emails are skipped silently (file log only).
+
+const NOTIFY_EMAIL = process.env.NOTIFY_EMAIL || '';
+const SMTP_HOST = process.env.SMTP_HOST || '';
+const SMTP_PORT = parseInt(process.env.SMTP_PORT || '465', 10);
+const SMTP_USER = process.env.SMTP_USER || '';
+const SMTP_PASS = process.env.SMTP_PASS || '';
+const SMTP_FROM = process.env.SMTP_FROM || SMTP_USER;
+const LOGINS_LOG = path.join(DATA_DIR, 'logins.log');
+
+let mailer = null;
+if (SMTP_HOST && SMTP_USER && SMTP_PASS && NOTIFY_EMAIL) {
+  try {
+    mailer = nodemailer.createTransport({
+      host: SMTP_HOST,
+      port: SMTP_PORT,
+      secure: SMTP_PORT === 465,
+      auth: { user: SMTP_USER, pass: SMTP_PASS },
+    });
+    console.log(`Login email notifications enabled (to ${NOTIFY_EMAIL} via ${SMTP_HOST})`);
+  } catch (err) {
+    console.error('SMTP setup failed — login emails disabled:', err.message);
+    mailer = null;
+  }
+} else {
+  console.log('Login email notifications disabled (set SMTP_HOST/USER/PASS + NOTIFY_EMAIL env to enable). File-log only.');
+}
+
+function appendLoginLog(line) {
+  try { fs.appendFileSync(LOGINS_LOG, line + '\n'); } catch {}
+}
+
+function sendNewLoginEmail(user, req) {
+  if (!mailer) return;
+  const ua = req.headers['user-agent'] || 'unknown';
+  const ip = (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '').toString().split(',')[0].trim();
+  const subject = `[llmlearn] New sign-in: ${user}`;
+  const text = [
+    `A new user just signed in to llmlearn for the first time.`,
+    ``,
+    `User:       ${user}`,
+    `Time:       ${new Date().toISOString()}`,
+    `IP:         ${ip || 'unknown'}`,
+    `User-Agent: ${ua}`,
+    ``,
+    `Open: https://llm.thelittleone.rocks/`,
+  ].join('\n');
+  mailer.sendMail({ from: SMTP_FROM, to: NOTIFY_EMAIL, subject, text })
+    .catch(err => console.error('login email failed:', err.message));
+}
+
+// Track a sighting. On the FIRST sighting of a user, we email + log.
+// On subsequent sightings, we just bump last_seen / login_count.
+// Cheap enough to call on every authenticated request — sqlite WAL absorbs
+// the writes well below any meaningful traffic level.
+function recordSighting(user, req) {
+  if (!db || !user) return;
+  try {
+    const existing = db.prepare('SELECT user_id FROM seen_users WHERE user_id = ?').get(user);
+    if (!existing) {
+      const now = Date.now();
+      db.prepare('INSERT INTO seen_users (user_id, first_seen, last_seen, login_count) VALUES (?, ?, ?, 1)').run(user, now, now);
+      appendLoginLog(`${new Date(now).toISOString()} NEW user=${user} ua="${(req.headers['user-agent'] || '').slice(0, 120)}"`);
+      sendNewLoginEmail(user, req);
+    } else {
+      db.prepare('UPDATE seen_users SET last_seen = ?, login_count = login_count + 1 WHERE user_id = ?').run(Date.now(), user);
+    }
+  } catch (err) {
+    console.error('recordSighting failed:', err.message);
+  }
 }
 
 function getUser(req) {
@@ -114,10 +206,12 @@ app.post('/api/progress', (req, res) => {
 });
 
 // GET /api/whoami — diagnostic: returns the detected user, or 401.
-// Useful for debugging the auth-header chain.
+// Useful for debugging the auth-header chain. Also the single best signal
+// for "user has just logged in" — every client polls this on mount.
 app.get('/api/whoami', (req, res) => {
   const user = getUser(req);
   if (!user) return res.status(401).json({ authenticated: false });
+  recordSighting(user, req);
   res.json({ authenticated: true, user });
 });
 
