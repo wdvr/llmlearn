@@ -9,6 +9,7 @@ const ClaudeChat = React.lazy(() => import('./components/ClaudeChat'))
 const Scratch = React.lazy(() => import('./components/Scratch'))
 const Glossary = React.lazy(() => import('./components/Glossary'))
 const CommandPalette = React.lazy(() => import('./components/CommandPalette'))
+const KeyboardShortcuts = React.lazy(() => import('./components/KeyboardShortcuts'))
 const NotFound = React.lazy(() => import('./components/NotFound'))
 
 const RouteFallback = () => (
@@ -32,6 +33,7 @@ function App() {
   const [chatOpen, setChatOpen] = useState(false)
   const [navOpen, setNavOpen] = useState(false)
   const [cmdkOpen, setCmdkOpen] = useState(false)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [fontSize, setFontSize] = useState(() => {
     try { return parseInt(localStorage.getItem('font_size') || '15') } catch { return 15 }
   })
@@ -287,14 +289,22 @@ function App() {
   // Close mobile drawer on every navigation.
   useEffect(() => { setNavOpen(false) }, [location.pathname])
 
-  // Global Cmd/Ctrl-K opens the command palette. Skip when an editable
-  // element already has focus and the modifier isn't pressed (so plain 'k'
-  // in a code editor still types 'k').
+  // Global keyboard shortcuts:
+  //   Cmd/Ctrl+K → command palette (anywhere)
+  //   ?          → shortcut reference modal (when no input is focused)
   useEffect(() => {
     const onKey = (e) => {
       if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
         e.preventDefault()
         setCmdkOpen(o => !o)
+        return
+      }
+      if (e.key === '?' && !e.metaKey && !e.ctrlKey) {
+        const tag = document.activeElement?.tagName
+        if (tag !== 'INPUT' && tag !== 'TEXTAREA' && !document.activeElement?.isContentEditable) {
+          e.preventDefault()
+          setShortcutsOpen(o => !o)
+        }
       }
     }
     window.addEventListener('keydown', onKey)
@@ -592,6 +602,16 @@ function App() {
             </span>
           </div>
           <div className="footer-meta">
+            <button
+              type="button"
+              className="footer-kbd"
+              onClick={() => setShortcutsOpen(true)}
+              title="Keyboard shortcuts (?)"
+              aria-label="Show keyboard shortcuts"
+            >
+              <span aria-hidden="true">⌨</span>
+              <kbd>?</kbd>
+            </button>
             <span className="footer-build">{__COMMIT_HASH__} · v{__BUILD_NUM__}</span>
             <a
               href="/oauth2/sign_out?rd=https://auth.thelittleone.rocks/oauth2/sign_out?rd=https://llm.thelittleone.rocks"
@@ -678,6 +698,11 @@ function App() {
       {/* Global Cmd/Ctrl-K command palette */}
       <Suspense fallback={null}>
         <CommandPalette open={cmdkOpen} onClose={() => setCmdkOpen(false)} />
+      </Suspense>
+
+      {/* `?` keyboard-shortcut reference modal */}
+      <Suspense fallback={null}>
+        <KeyboardShortcuts open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
       </Suspense>
     </div>
   )
