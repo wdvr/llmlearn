@@ -2086,6 +2086,71 @@ code, pre {
   transform: translateX(2px);
 }
 
+/* Time chip inside the Related Modules course tag — sits next to the
+   course name for at-a-glance scannability. */
+.related-time {
+  color: var(--text-muted);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Richer prev/next nav buttons at the bottom of a module: arrow + small
+   label ("Previous"/"Next up") + module title + reading-time chip. */
+.module-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  text-align: left;
+  max-width: 42%;
+}
+.module-nav-btn-next {
+  text-align: right;
+}
+.module-nav-arrow {
+  font-size: 18px;
+  line-height: 1;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.module-nav-btn:hover .module-nav-arrow {
+  color: var(--accent);
+}
+.module-nav-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.module-nav-btn-next .module-nav-text {
+  align-items: flex-end;
+}
+.module-nav-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+.module-nav-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 28ch;
+}
+.module-nav-time {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 768px) {
+  .module-nav-btn { max-width: 100%; }
+  .module-nav-title { max-width: 100%; }
+}
+
 /* "Continue this course" CTA on course-detail pages. Highlights either the
    most-recently visited module in this course, or — if user has progress
    but no recent visit on this device — the next incomplete module. */

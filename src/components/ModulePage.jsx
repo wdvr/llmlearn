@@ -738,6 +738,7 @@ export default function ModulePage({
               const rel = findModule(relId)
               const relCourse = findModuleCourse(relId)
               if (!rel || !relCourse) return null
+              const relMinutes = readingTimeFor(relId)
               return (
                 <Link
                   key={relId}
@@ -747,7 +748,10 @@ export default function ModulePage({
                 >
                   <div className="related-icon" aria-hidden="true">{relCourse.icon}</div>
                   <div className="related-text">
-                    <div className="related-course-tag">{relCourse.title}</div>
+                    <div className="related-course-tag">
+                      {relCourse.title}
+                      {relMinutes && <span className="related-time"> · ⏱ {relMinutes} min</span>}
+                    </div>
                     <div className="related-title">{rel.title}</div>
                     {note && <div className="related-note">{note}</div>}
                   </div>
@@ -773,8 +777,15 @@ export default function ModulePage({
 
       <div className="module-nav">
         {prevModule ? (
-          <Link to={`/module/${prevModule.id}`} className="btn btn-secondary">
-            ← {prevModule.title}
+          <Link to={`/module/${prevModule.id}`} className="btn btn-secondary module-nav-btn">
+            <span className="module-nav-arrow" aria-hidden="true">←</span>
+            <span className="module-nav-text">
+              <span className="module-nav-label">Previous</span>
+              <span className="module-nav-title">{prevModule.title}</span>
+              {readingTimeFor(prevModule.id) && (
+                <span className="module-nav-time">⏱ {readingTimeFor(prevModule.id)} min</span>
+              )}
+            </span>
           </Link>
         ) : <div />}
 
@@ -802,8 +813,15 @@ export default function ModulePage({
         )}
 
         {nextModule ? (
-          <Link to={`/module/${nextModule.id}`} className="btn btn-secondary">
-            {nextModule.title} →
+          <Link to={`/module/${nextModule.id}`} className="btn btn-secondary module-nav-btn module-nav-btn-next">
+            <span className="module-nav-text">
+              <span className="module-nav-label">Next up</span>
+              <span className="module-nav-title">{nextModule.title}</span>
+              {readingTimeFor(nextModule.id) && (
+                <span className="module-nav-time">⏱ {readingTimeFor(nextModule.id)} min</span>
+              )}
+            </span>
+            <span className="module-nav-arrow" aria-hidden="true">→</span>
           </Link>
         ) : course ? (
           <Link to={`/course/${course.id}`} className="btn btn-secondary">
