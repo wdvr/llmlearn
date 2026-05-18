@@ -2086,6 +2086,68 @@ code, pre {
   transform: translateX(2px);
 }
 
+/* "Continue this course" CTA on course-detail pages. Highlights either the
+   most-recently visited module in this course, or — if user has progress
+   but no recent visit on this device — the next incomplete module. */
+.course-resume {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 18px;
+  margin: -8px 0 22px;
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--course-color, var(--accent)) 8%, transparent),
+    transparent);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--course-color, var(--accent));
+  border-radius: 10px;
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.15s, transform 0.15s, border-color 0.15s;
+}
+.course-resume:hover {
+  border-color: var(--course-color, var(--accent));
+  transform: translateX(2px);
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--course-color, var(--accent)) 14%, transparent),
+    transparent);
+}
+.course-resume-icon {
+  font-size: 22px;
+  line-height: 1;
+  color: var(--course-color, var(--accent));
+  flex-shrink: 0;
+}
+.course-resume-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.course-resume-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+.course-resume-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.course-resume-cta {
+  font-size: 13px;
+  color: var(--course-color, var(--accent));
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 /* "Recently studied" list on the landing page — shows up to 4 module
    shortcuts under the Resume CTA. Helps regulars jump back without scrolling
    through the courses grid. */

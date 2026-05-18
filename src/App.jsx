@@ -625,7 +625,7 @@ function App() {
                 />
               }
             />
-            <Route path="/course/:courseId" element={<CoursePage courses={courses} completed={completed} />} />
+            <Route path="/course/:courseId" element={<CoursePage courses={courses} completed={completed} recentlyVisited={recentlyVisited} />} />
             <Route
               path="/module/:id"
               element={
@@ -876,7 +876,7 @@ function LandingPage({ courses, completed, lastVisited, recentlyVisited }) {
   )
 }
 
-function CoursePage({ courses, completed }) {
+function CoursePage({ courses, completed, recentlyVisited = [] }) {
   const { courseId } = useParams()
   const course = courses.find(c => c.id === courseId)
 
@@ -888,6 +888,27 @@ function CoursePage({ courses, completed }) {
   const done = course.modules.filter(m => completed.includes(m.id)).length
   const pct = Math.round((done / course.modules.length) * 100)
   const totalMin = courseTotalMinutes(course)
+
+  // Find the most-recent visited module that belongs to THIS course, so we
+  // can surface a "Continue this course" CTA. Falls back to the first
+  // incomplete module if no recent visit (the natural next-step).
+  const resumeInCourse = (() => {
+    const moduleIds = new Set(course.modules.map(m => m.id))
+    for (const e of recentlyVisited || []) {
+      if (moduleIds.has(e.moduleId)) {
+        const mod = course.modules.find(m => m.id === e.moduleId)
+        if (mod) return { module: mod, ts: e.ts, reason: 'recent' }
+      }
+    }
+    // Fallback: first not-yet-completed module is a reasonable next step.
+    const firstIncomplete = course.modules.find(m => !completed.includes(m.id))
+    if (firstIncomplete && done > 0) {
+      // Only suggest "next up" if user has made some progress in this course;
+      // a fresh course doesn't need a "continue here" callout pushing them.
+      return { module: firstIncomplete, ts: null, reason: 'next' }
+    }
+    return null
+  })()
 
   return (
     <div className="home">
@@ -921,6 +942,27 @@ function CoursePage({ courses, completed }) {
           </div>
         </div>
       </div>
+
+      {resumeInCourse && (
+        <Link
+          to={`/module/${resumeInCourse.module.id}`}
+          className="course-resume"
+          style={{ '--course-color': course.color }}
+        >
+          <span className="course-resume-icon" aria-hidden="true">
+            {resumeInCourse.reason === 'recent' ? '↪' : '▶'}
+          </span>
+          <span className="course-resume-text">
+            <span className="course-resume-label">
+              {resumeInCourse.reason === 'recent'
+                ? `Continue this course · ${humanAgoShort(Date.now() - resumeInCourse.ts)}`
+                : 'Next up'}
+            </span>
+            <span className="course-resume-title">{resumeInCourse.module.title}</span>
+          </span>
+          <span className="course-resume-cta">Open →</span>
+        </Link>
+      )}
 
       {course.exerciseRuntime === 'colab' && (
         <div className="callout callout-info">
