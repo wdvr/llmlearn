@@ -92,6 +92,8 @@ export default function CommandPalette({ open, onClose }) {
   const [selected, setSelected] = useState(0)
   const inputRef = useRef(null)
   const listRef = useRef(null)
+  const modalRef = useRef(null)
+  const restoreFocusRef = useRef(null)
   const index = useMemo(buildIndex, [])
 
   const results = useMemo(() => {
@@ -126,13 +128,34 @@ export default function CommandPalette({ open, onClose }) {
   // Reset selection when query changes.
   useEffect(() => { setSelected(0) }, [query])
 
-  // Focus input when opened.
+  // Focus input on open; restore prior focus on close. Also lock body
+  // scroll while the palette is open so the underlying page doesn't shift
+  // around when the user scrolls inside the modal.
   useEffect(() => {
     if (open) {
+      // Remember who had focus so we can return there on close (e.g., the
+      // sidebar Search button or the Cmd+K trigger).
+      restoreFocusRef.current = document.activeElement
+      document.body.style.overflow = 'hidden'
       requestAnimationFrame(() => inputRef.current?.focus())
     } else {
       setQuery('')
       setSelected(0)
+      document.body.style.overflow = ''
+      // Return focus to where it was before the modal opened. Skip if the
+      // element is no longer focusable (e.g., user clicked a result that
+      // navigated to a new route — in that case browser default focus is
+      // appropriate).
+      const prev = restoreFocusRef.current
+      if (prev && typeof prev.focus === 'function' && document.body.contains(prev)) {
+        try { prev.focus() } catch {}
+      }
+      restoreFocusRef.current = null
+    }
+    return () => {
+      // Defensive cleanup: if the component unmounts while open (route
+      // change?), restore body scroll.
+      document.body.style.overflow = ''
     }
   }, [open])
 
@@ -174,10 +197,37 @@ export default function CommandPalette({ open, onClose }) {
   return (
     <div className="cmdk-backdrop" onClick={onClose} role="presentation">
       <div
+        ref={modalRef}
         className="cmdk-modal"
         role="dialog"
+        aria-modal="true"
         aria-label="Search modules, terms, and courses"
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          // Escape from anywhere inside the dialog closes it (the input
+          // already handles its own Esc; this catches Esc when focus is
+          // on a result button after Tab navigation).
+          if (e.key === 'Escape') {
+            e.preventDefault()
+            onClose()
+            return
+          }
+          // Tab focus trap: cycle within the modal's focusable elements.
+          if (e.key !== 'Tab' || !modalRef.current) return
+          const focusable = modalRef.current.querySelectorAll(
+            'input, button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'
+          )
+          if (focusable.length === 0) return
+          const first = focusable[0]
+          const last = focusable[focusable.length - 1]
+          if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault()
+            last.focus()
+          } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault()
+            first.focus()
+          }
+        }}
       >
         <div className="cmdk-input-row">
           <span className="cmdk-search-icon" aria-hidden="true">🔍</span>
