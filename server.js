@@ -5,7 +5,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import Database from 'better-sqlite3';
-import nodemailer from 'nodemailer';
+import { SESv2Client, SendEmailCommand } from '@aws-sdk/client-sesv2';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -57,42 +57,35 @@ try {
 }
 
 // =============================================================================
-// Login notifications
+// Login notifications via AWS SES
 // =============================================================================
-// On a user's first-ever sign-in we send an email to NOTIFY_EMAIL so the
-// admin (Wouter) knows when a new person joined. SMTP creds come from env
-// vars; if any are missing we still log the event to /data/logins.log so the
-// signal isn't lost.
+// On a user's first-ever sign-in, send an email to NOTIFY_EMAIL via SES.
+// SES is already verified for wdvr.dev (DKIM + production access). We use
+// the SDK directly so the only credentials needed are the standard AWS keys
+// at /root/.aws (mounted from the host in docker-compose).
 //
-// Required env for email sending:
-//   SMTP_HOST, SMTP_PORT (default 465), SMTP_USER, SMTP_PASS,
-//   SMTP_FROM (defaults to SMTP_USER), NOTIFY_EMAIL (recipient)
-// If SMTP_HOST is unset, emails are skipped silently (file log only).
+// Env knobs:
+//   NOTIFY_EMAIL  — recipient (e.g. wouterdevriendt@gmail.com)
+//   SES_FROM      — sender (verified domain; default llmlearn@wdvr.dev)
+//   AWS_REGION    — SES region (default us-east-1)
+// File log at /data/logins.log captures every sign-in regardless of email.
 
 const NOTIFY_EMAIL = process.env.NOTIFY_EMAIL || '';
-const SMTP_HOST = process.env.SMTP_HOST || '';
-const SMTP_PORT = parseInt(process.env.SMTP_PORT || '465', 10);
-const SMTP_USER = process.env.SMTP_USER || '';
-const SMTP_PASS = process.env.SMTP_PASS || '';
-const SMTP_FROM = process.env.SMTP_FROM || SMTP_USER;
+const SES_FROM = process.env.SES_FROM || 'llmlearn@wdvr.dev';
+const AWS_REGION = process.env.AWS_REGION || 'us-east-1';
 const LOGINS_LOG = path.join(DATA_DIR, 'logins.log');
 
-let mailer = null;
-if (SMTP_HOST && SMTP_USER && SMTP_PASS && NOTIFY_EMAIL) {
+let sesClient = null;
+if (NOTIFY_EMAIL) {
   try {
-    mailer = nodemailer.createTransport({
-      host: SMTP_HOST,
-      port: SMTP_PORT,
-      secure: SMTP_PORT === 465,
-      auth: { user: SMTP_USER, pass: SMTP_PASS },
-    });
-    console.log(`Login email notifications enabled (to ${NOTIFY_EMAIL} via ${SMTP_HOST})`);
+    sesClient = new SESv2Client({ region: AWS_REGION });
+    console.log(`Login email notifications enabled — SES from ${SES_FROM} → ${NOTIFY_EMAIL} (region ${AWS_REGION})`);
   } catch (err) {
-    console.error('SMTP setup failed — login emails disabled:', err.message);
-    mailer = null;
+    console.error('SES client init failed — login emails disabled:', err.message);
+    sesClient = null;
   }
 } else {
-  console.log('Login email notifications disabled (set SMTP_HOST/USER/PASS + NOTIFY_EMAIL env to enable). File-log only.');
+  console.log('Login email notifications disabled (set NOTIFY_EMAIL env to enable). File-log only.');
 }
 
 function appendLoginLog(line) {
@@ -100,7 +93,7 @@ function appendLoginLog(line) {
 }
 
 function sendNewLoginEmail(user, req) {
-  if (!mailer) return;
+  if (!sesClient || !NOTIFY_EMAIL) return;
   const ua = req.headers['user-agent'] || 'unknown';
   const ip = (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '').toString().split(',')[0].trim();
   const subject = `[llmlearn] New sign-in: ${user}`;
@@ -114,8 +107,17 @@ function sendNewLoginEmail(user, req) {
     ``,
     `Open: https://llm.thelittleone.rocks/`,
   ].join('\n');
-  mailer.sendMail({ from: SMTP_FROM, to: NOTIFY_EMAIL, subject, text })
-    .catch(err => console.error('login email failed:', err.message));
+  const cmd = new SendEmailCommand({
+    FromEmailAddress: SES_FROM,
+    Destination: { ToAddresses: [NOTIFY_EMAIL] },
+    Content: {
+      Simple: {
+        Subject: { Data: subject, Charset: 'UTF-8' },
+        Body: { Text: { Data: text, Charset: 'UTF-8' } },
+      },
+    },
+  });
+  sesClient.send(cmd).catch(err => console.error('SES sendEmail failed:', err.message));
 }
 
 // Track a sighting. On the FIRST sighting of a user, we email + log.

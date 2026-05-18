@@ -10,18 +10,17 @@ services:
       - /home/wouter/.claude:/root/.claude
       # Persistent progress DB (SQLite). Survives container rebuilds.
       - /home/wouter/llmlearn-data:/data
+      # AWS creds for SES login-notification emails (read-only).
+      - /home/wouter/.aws:/root/.aws:ro
     environment:
       - PORT=3001
       - LLMLEARN_DATA_DIR=/data
-      # Login-notification email (optional). Put real values in /home/wouter/llmlearn/.env
-      # to email NOTIFY_EMAIL on the first sign-in by each new user. When
-      # unset, sign-ins are still recorded to /data/logins.log.
+      # Login-notification email via AWS SES. NOTIFY_EMAIL is required to
+      # enable emails; SES_FROM must be on a verified domain (wdvr.dev is
+      # verified). AWS creds come from the mounted ~/.aws above.
       - NOTIFY_EMAIL=${NOTIFY_EMAIL:-}
-      - SMTP_HOST=${SMTP_HOST:-}
-      - SMTP_PORT=${SMTP_PORT:-465}
-      - SMTP_USER=${SMTP_USER:-}
-      - SMTP_PASS=${SMTP_PASS:-}
-      - SMTP_FROM=${SMTP_FROM:-}
+      - SES_FROM=${SES_FROM:-llmlearn@wdvr.dev}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
     networks:
       - npm
 
