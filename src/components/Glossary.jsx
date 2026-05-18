@@ -1,7 +1,67 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { glossary, glossaryCategories } from '../content/glossary'
+import { glossary, glossaryByTerm, glossaryCategories } from '../content/glossary'
 import { findModule, findModuleCourse } from '../content/courses'
+
+// Build a single combined regex that matches any glossary term (or alias) as
+// a word, sorted longest-first so "Tensor Core" matches before "Tensor".
+// Computed once at module load. Used by renderDefinition() to auto-link
+// references to other entries within a definition.
+const linkifyRegex = (() => {
+  const entries = []
+  for (const e of glossary) {
+    entries.push({ key: e.term, target: e })
+    for (const a of (e.aliases || [])) entries.push({ key: a, target: e })
+  }
+  // Sort by term length descending so longer terms win the leftmost match.
+  entries.sort((a, b) => b.key.length - a.key.length)
+  const map = new Map()
+  for (const { key, target } of entries) {
+    const lc = key.toLowerCase()
+    if (!map.has(lc)) map.set(lc, target)
+  }
+  // Build alternation. Escape regex metacharacters.
+  const escaped = [...map.keys()].map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+  // Word-boundary on both sides — but \b doesn't work with all our keys
+  // (e.g., "torch.compile" — the "." isn't a word char). Use lookarounds:
+  // not preceded/followed by a letter or digit. Allows symbols/spaces.
+  const re = new RegExp(`(?<![a-zA-Z0-9])(${escaped.join('|')})(?![a-zA-Z0-9])`, 'gi')
+  return { re, map }
+})()
+
+// Render a definition with inline links to any referenced glossary entries.
+// Self-references (definition mentioning its own term) are NOT linked. Each
+// term is linked at most once per definition (first occurrence wins) so we
+// don't visually swamp the text.
+function renderDefinition(text, selfSlug) {
+  if (!text) return text
+  const out = []
+  const { re, map } = linkifyRegex
+  const seen = new Set()
+  let lastIdx = 0
+  let match
+  re.lastIndex = 0
+  while ((match = re.exec(text)) !== null) {
+    const key = match[1].toLowerCase()
+    const entry = map.get(key)
+    if (!entry) continue
+    if (entry.slug === selfSlug) continue
+    if (seen.has(entry.slug)) continue
+    seen.add(entry.slug)
+    if (match.index > lastIdx) out.push(text.slice(lastIdx, match.index))
+    out.push(
+      <a
+        key={`${entry.slug}-${match.index}`}
+        href={`#/glossary#${entry.slug}`}
+        className="glossary-xref"
+        title={entry.definition}
+      >{match[1]}</a>
+    )
+    lastIdx = match.index + match[1].length
+  }
+  if (lastIdx < text.length) out.push(text.slice(lastIdx))
+  return out
+}
 
 // Group entries by category, preserving insertion order within each group so
 // callers can rely on the file order being meaningful.
@@ -250,7 +310,7 @@ function GlossaryEntry({ entry }) {
           }}
         >#</a>
       </h4>
-      <p className="glossary-definition">{entry.definition}</p>
+      <p className="glossary-definition">{renderDefinition(entry.definition, entry.slug)}</p>
       {entry.aliases && entry.aliases.length > 0 && (
         <div className="glossary-aliases">
           Also: {entry.aliases.map((a, i) => (

@@ -3153,6 +3153,23 @@ code, pre {
   cursor: help;
   transition: text-decoration-color 0.15s, color 0.15s;
 }
+
+/* Cross-reference link inside a glossary definition. Subtler than the
+   in-module .glossary-link because the definition is dense and we don't
+   want every link competing for attention. */
+.glossary-xref {
+  color: var(--text);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: rgba(155, 166, 179, 0.35);
+  text-underline-offset: 3px;
+  transition: color 0.15s, text-decoration-color 0.15s;
+}
+.glossary-xref:hover {
+  color: var(--accent);
+  text-decoration-style: solid;
+  text-decoration-color: var(--accent);
+}
 .glossary-link:hover {
   text-decoration-style: solid;
   text-decoration-color: var(--accent);
