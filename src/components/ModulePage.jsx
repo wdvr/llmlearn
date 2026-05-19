@@ -1016,28 +1016,47 @@ export default function ModulePage({
           </Link>
         ) : <div />}
 
-        {completed.includes(module.id) ? (
-          <div className="complete-cluster">
-            <span className="btn btn-success btn-static" aria-label="Module completed">
-              ✓ Completed
-            </span>
+        <div className="complete-cluster">
+          {completed.includes(module.id) ? (
+            <>
+              <span className="btn btn-success btn-static" aria-label="Module completed">
+                ✓ Completed
+              </span>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm complete-undo"
+                onClick={() => onUncomplete?.(module.id)}
+                title="Re-add this module to your to-do list"
+              >
+                Mark as not read
+              </button>
+            </>
+          ) : (
             <button
-              type="button"
-              className="btn btn-ghost btn-sm complete-undo"
-              onClick={() => onUncomplete?.(module.id)}
-              title="Re-add this module to your to-do list"
+              className="btn btn-primary"
+              onClick={() => onComplete(module.id)}
             >
-              Mark as not read
+              Mark as Complete
             </button>
-          </div>
-        ) : (
+          )}
+          {/* Bookmark button mirrored at the bottom too — when reading on
+              mobile, by the time the user reaches the end of a long module
+              the top header is far away, and pinning the current scroll
+              position is the natural action to take here. */}
           <button
-            className="btn btn-primary"
-            onClick={() => onComplete(module.id)}
+            type="button"
+            className={`btn btn-ghost btn-sm module-bookmark-bottom ${bookmarkFlash ? 'flash' : ''}`}
+            onClick={() => {
+              const y = window.scrollY || document.documentElement.scrollTop || 0
+              onSaveScrollPosition?.(id, y, currentSectionRef.current, { force: true })
+              setBookmarkFlash(true)
+              setTimeout(() => setBookmarkFlash(false), 1500)
+            }}
+            title="Pin your current scroll position so you can resume here next time"
           >
-            Mark as Complete
+            {bookmarkFlash ? '✓ Bookmarked' : '📍 Bookmark here'}
           </button>
-        )}
+        </div>
 
         {nextModule ? (
           <Link

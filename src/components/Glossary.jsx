@@ -117,22 +117,39 @@ export default function Glossary() {
     return () => window.removeEventListener('keydown', onKey)
   }, [filter])
 
-  // Initial scroll to hash if the URL has one (e.g. /glossary#kv-cache)
+  // Scroll to the anchored slug both on initial mount AND on any subsequent
+  // hashchange — clicking a #/glossary#X link from inside the glossary page
+  // doesn't remount the component, so a one-shot mount effect would miss it.
+  // We also retry the scroll a few times because on mobile the glossary is
+  // large enough that getBoundingClientRect can shift after the first paint.
   useEffect(() => {
-    const hash = window.location.hash.replace(/^#/, '')
-    // react-router parses everything after # — but our anchor lives after a
-    // second # in /#/glossary#kv-cache. The slug we care about is whatever
-    // comes after the LAST '#' in the raw URL.
-    const raw = window.location.href
-    const lastHash = raw.lastIndexOf('#')
-    const slug = lastHash >= 0 ? raw.slice(lastHash + 1) : ''
-    if (slug && document.getElementById(slug)) {
-      // Defer to let the page paint first so getBoundingClientRect is correct.
-      setTimeout(() => {
+    function scrollToHash() {
+      // react-router parses everything after # — our anchor lives after a
+      // second # in /#/glossary#warp. The slug is everything after the LAST '#'.
+      const raw = window.location.href
+      const lastHash = raw.lastIndexOf('#')
+      const slug = lastHash >= 0 ? raw.slice(lastHash + 1) : ''
+      if (!slug) return
+      // Retry a few times — on slower devices (mobile) the entry may not be
+      // laid out yet when the first attempt fires.
+      let tries = 0
+      const tryScroll = () => {
         const el = document.getElementById(slug)
-        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      }, 50)
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          // Briefly highlight so the user sees where they landed.
+          el.classList.add('glossary-entry-flash')
+          setTimeout(() => el.classList.remove('glossary-entry-flash'), 1600)
+          return
+        }
+        if (tries++ < 8) setTimeout(tryScroll, 80)
+      }
+      // Defer once so the initial render commits.
+      requestAnimationFrame(() => requestAnimationFrame(tryScroll))
     }
+    scrollToHash()
+    window.addEventListener('hashchange', scrollToHash)
+    return () => window.removeEventListener('hashchange', scrollToHash)
   }, [])
 
   const filtered = useMemo(() => {

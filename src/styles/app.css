@@ -522,8 +522,11 @@ a.footer-sync-cta:focus-visible .sync-dot.sync-local {
   margin-bottom: 12px;
 }
 
+/* Plain bolds in module prose stay neutral. Accent blue is reserved for
+   glossary-linked terms (.glossary-link), so blue consistently means
+   "clickable". */
 .section-content strong {
-  color: var(--accent);
+  color: inherit;
   font-weight: 600;
 }
 
@@ -652,7 +655,14 @@ a.footer-sync-cta:focus-visible .sync-dot.sync-local {
   height: 4px;
   background: var(--bg-tertiary);
   border-radius: 2px;
-  transition: background 0.2s, transform 0.2s;
+  transition: background 0.2s, transform 0.2s, opacity 0.15s;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  appearance: none;
+}
+.quiz-progress-seg:hover {
+  opacity: 0.7;
 }
 .quiz-progress-seg.correct {
   background: var(--green);
@@ -670,6 +680,38 @@ a.footer-sync-cta:focus-visible .sync-dot.sync-local {
 .quiz-progress-seg.current.correct,
 .quiz-progress-seg.current.incorrect {
   transform: scaleY(1.5);
+}
+
+/* Quiz header row — title + "Redo quiz" button on the right. */
+.quiz-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.quiz-header-row h3 {
+  margin: 0;
+}
+.quiz-redo-btn {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.quiz-redo-btn:hover,
+.quiz-redo-btn:focus-visible {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: rgba(88, 166, 255, 0.06);
+}
+.quiz-counter-saved {
+  color: var(--green, #3fb950);
+  font-weight: 500;
 }
 
 .quiz-section h3 {
@@ -3285,7 +3327,36 @@ a.footer-sync-cta:focus-visible .sync-dot.sync-local {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
+}
+.module-bookmark-bottom {
+  font-size: 12px;
+  padding: 5px 12px;
+  margin-top: 2px;
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.module-bookmark-bottom:hover,
+.module-bookmark-bottom:focus-visible {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: rgba(88, 166, 255, 0.08);
+}
+.module-bookmark-bottom.flash {
+  color: var(--green, #3fb950);
+  border-color: var(--green, #3fb950);
+  background: rgba(63, 185, 80, 0.10);
+}
+@media (max-width: 768px) {
+  .module-bookmark-bottom {
+    width: 100%;
+    padding: 10px 14px;
+    font-size: 13px;
+  }
 }
 .complete-undo {
   font-size: 11px;
@@ -3953,9 +4024,16 @@ a.footer-sync-cta:focus-visible .sync-dot.sync-local {
 .glossary-entry:hover {
   border-color: var(--border-hover);
 }
-.glossary-entry:target {
+.glossary-entry:target,
+.glossary-entry.glossary-entry-flash {
   border-color: var(--accent);
-  background: rgba(56, 139, 253, 0.05);
+  background: rgba(56, 139, 253, 0.08);
+  box-shadow: 0 0 0 3px rgba(56, 139, 253, 0.18);
+  animation: glossary-flash 1.4s ease-out;
+}
+@keyframes glossary-flash {
+  0%   { box-shadow: 0 0 0 6px rgba(56, 139, 253, 0.35); }
+  100% { box-shadow: 0 0 0 3px rgba(56, 139, 253, 0.18); }
 }
 
 .glossary-term {

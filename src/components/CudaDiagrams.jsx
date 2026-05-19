@@ -2533,6 +2533,200 @@ export const MLACompression = () => {
   )
 }
 
+// =========================================================================
+// T4Hierarchy — Module 01: T4 GPU architecture, zoom from device → SM → warp
+// Shows the size relationships in one picture so the numbers stop being
+// abstract: 40 SMs × 64 cores = 2,560; 65,536 regs ÷ (32 warps × 32 lanes) =
+// 64 regs/thread at full occupancy; 64 KB shared / SM; 16 GB GDDR6 @ 320 GB/s.
+// =========================================================================
+export const T4Hierarchy = () => {
+  const W = 760, H = 720
+  const HIGHLIGHT = 0 // which SM to zoom into
+
+  // --- Top tier: 40-SM grid in the device --------------------------------
+  const gpuX = 30, gpuY = 50, gpuW = W - 60, gpuH = 170
+  const cols = 10, rows = 4
+  const smGap = 6
+  const innerPad = 18
+  const smW = (gpuW - innerPad * 2 - smGap * (cols - 1)) / cols
+  const smH = 28
+  const smGridY = gpuY + 42
+  const smIdx = (r, c) => r * cols + c
+
+  // --- Middle tier: single SM zoom ---------------------------------------
+  const smZoomX = 30, smZoomY = 260, smZoomW = W - 60, smZoomH = 230
+  // 8x8 core grid inside the SM
+  const coreGap = 3
+  const coreCols = 8, coreRows = 8
+  const coreAreaX = smZoomX + 20, coreAreaY = smZoomY + 60
+  const coreAreaW = 220
+  const coreAreaH = 140
+  const coreW = (coreAreaW - coreGap * (coreCols - 1)) / coreCols
+  const coreH = (coreAreaH - coreGap * (coreRows - 1)) / coreRows
+
+  // --- Bottom tier: warp = 32 lanes --------------------------------------
+  const warpY = 540, warpH = 60
+  const laneGap = 2
+  const laneCount = 32
+  const warpInnerX = 50
+  const warpInnerW = W - 100
+  const laneW = (warpInnerW - laneGap * (laneCount - 1)) / laneCount
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={wrapperStyle(820)} role="img" aria-labelledby="t4h-title t4h-desc">
+      <title id="t4h-title">NVIDIA T4 GPU hierarchy: device, SM, warp</title>
+      <desc id="t4h-desc">Nested view of the T4 showing 40 streaming multiprocessors in the device, one SM zoomed to show 64 CUDA cores plus shared memory and a register file, and one warp expanded to 32 threads.</desc>
+
+      <text x={W / 2} y={26} fontFamily={FONT} fontSize="15" fill={COLORS.text} textAnchor="middle" fontWeight="700">
+        NVIDIA T4 — how the numbers nest
+      </text>
+
+      {/* ============ Tier 1: full GPU ============ */}
+      <rect x={gpuX} y={gpuY} width={gpuW} height={gpuH} rx="8" fill={COLORS.panel} stroke={COLORS.accent} strokeWidth="1.5" />
+      <text x={gpuX + 14} y={gpuY + 22} fontFamily={FONT} fontSize="13" fill={COLORS.accent} fontWeight="700">T4 GPU</text>
+      <text x={gpuX + gpuW - 14} y={gpuY + 22} fontFamily={MONO} fontSize="11" fill={COLORS.muted} textAnchor="end">
+        2,560 CUDA cores · 320 Tensor Cores · 8.1 TFLOPS FP32
+      </text>
+
+      {/* SM grid */}
+      {Array.from({ length: rows }).map((_, r) => (
+        Array.from({ length: cols }).map((_, c) => {
+          const i = smIdx(r, c)
+          const x = gpuX + innerPad + c * (smW + smGap)
+          const y = smGridY + r * (smH + smGap)
+          const isHL = i === HIGHLIGHT
+          return (
+            <g key={`sm-${i}`}>
+              <rect
+                x={x} y={y} width={smW} height={smH} rx="3"
+                fill={isHL ? COLORS.accent : '#243042'}
+                fillOpacity={isHL ? 0.55 : 1}
+                stroke={isHL ? COLORS.accent : COLORS.grid}
+                strokeWidth={isHL ? 1.8 : 0.8}
+              />
+              <text x={x + smW / 2} y={y + smH / 2 + 3} fontFamily={MONO} fontSize="9"
+                fill={isHL ? COLORS.text : COLORS.muted} textAnchor="middle" fontWeight={isHL ? 700 : 400}>
+                SM{i}
+              </text>
+            </g>
+          )
+        })
+      ))}
+
+      {/* GPU-level annotations (HBM + memory bus) */}
+      <text x={gpuX + 14} y={gpuY + gpuH - 12} fontFamily={MONO} fontSize="11" fill={COLORS.green}>
+        16 GB GDDR6 · 320 GB/s · device-wide L2 = 4 MB
+      </text>
+      <text x={gpuX + gpuW - 14} y={gpuY + gpuH - 12} fontFamily={MONO} fontSize="11" fill={COLORS.muted} textAnchor="end">
+        40 SMs × 64 cores = 2,560
+      </text>
+
+      {/* Connector: SM0 down to zoom */}
+      <line x1={gpuX + innerPad + smW / 2} y1={smGridY + smH}
+            x2={smZoomX + 110} y2={smZoomY}
+            stroke={COLORS.accent} strokeWidth="1.2" strokeDasharray="4 3" />
+      <text x={(gpuX + innerPad + smW / 2 + smZoomX + 110) / 2 + 10} y={smZoomY - 10}
+            fontFamily={FONT} fontSize="10" fill={COLORS.accent} fontStyle="italic">zoom →</text>
+
+      {/* ============ Tier 2: one SM ============ */}
+      <rect x={smZoomX} y={smZoomY} width={smZoomW} height={smZoomH} rx="8" fill={COLORS.panel} stroke={COLORS.accent} strokeWidth="1.5" />
+      <text x={smZoomX + 14} y={smZoomY + 22} fontFamily={FONT} fontSize="13" fill={COLORS.accent} fontWeight="700">
+        Inside one SM
+      </text>
+      <text x={smZoomX + smZoomW - 14} y={smZoomY + 22} fontFamily={MONO} fontSize="11" fill={COLORS.muted} textAnchor="end">
+        each SM is identical · 40 of these on a T4
+      </text>
+
+      {/* Core grid 8×8 */}
+      <text x={coreAreaX} y={coreAreaY - 8} fontFamily={MONO} fontSize="10" fill={COLORS.muted}>
+        64 FP32 cores (lanes)
+      </text>
+      {Array.from({ length: coreRows }).map((_, r) => (
+        Array.from({ length: coreCols }).map((_, c) => {
+          const x = coreAreaX + c * (coreW + coreGap)
+          const y = coreAreaY + r * (coreH + coreGap)
+          return <rect key={`core-${r}-${c}`} x={x} y={y} width={coreW} height={coreH}
+                       fill={COLORS.green} fillOpacity="0.40" stroke={COLORS.green} strokeWidth="0.6" />
+        })
+      ))}
+      <text x={coreAreaX + coreAreaW / 2} y={coreAreaY + coreAreaH + 16}
+            fontFamily={MONO} fontSize="10" fill={COLORS.green} textAnchor="middle">
+        2 warps × 32 lanes execute per clock
+      </text>
+
+      {/* Right-side panels: shared mem, register file, warp scheduler */}
+      {(() => {
+        const px = smZoomX + 280, pw = smZoomW - 280 - 20
+        const panels = [
+          { y: coreAreaY,           color: COLORS.yellow, title: 'Shared memory + L1', detail: '64 KB · ~5 cycles · ~10 TB/s' },
+          { y: coreAreaY + 48,      color: COLORS.orange, title: 'Register file',      detail: '65,536 × 4B = 256 KB' },
+          { y: coreAreaY + 96,      color: COLORS.purple, title: '4 warp schedulers',  detail: '256 in-flight threads max' },
+          { y: coreAreaY + 144,     color: COLORS.muted,  title: 'Tensor Cores',       detail: '8 per SM (320 total on chip)' },
+        ]
+        return panels.map((p, i) => (
+          <g key={`panel-${i}`}>
+            <rect x={px} y={p.y} width={pw} height={36} rx="4"
+                  fill={p.color} fillOpacity="0.14" stroke={p.color} strokeWidth="1" />
+            <text x={px + 10} y={p.y + 15} fontFamily={FONT} fontSize="11" fill={p.color} fontWeight="700">
+              {p.title}
+            </text>
+            <text x={px + 10} y={p.y + 29} fontFamily={MONO} fontSize="10" fill={COLORS.text}>
+              {p.detail}
+            </text>
+          </g>
+        ))
+      })()}
+
+      {/* Connector: one warp scheduler down to warp zoom */}
+      <line x1={smZoomX + 320} y1={smZoomY + smZoomH}
+            x2={warpInnerX + 80} y2={warpY}
+            stroke={COLORS.purple} strokeWidth="1.2" strokeDasharray="4 3" />
+      <text x={smZoomX + 360} y={warpY - 10} fontFamily={FONT} fontSize="10" fill={COLORS.purple} fontStyle="italic">
+        zoom into one warp →
+      </text>
+
+      {/* ============ Tier 3: one warp = 32 lanes ============ */}
+      <rect x={warpInnerX - 20} y={warpY} width={W - (warpInnerX - 20) * 2 + 0} height={warpH} rx="8"
+            fill={COLORS.panel} stroke={COLORS.purple} strokeWidth="1.5" />
+      <text x={warpInnerX} y={warpY + 18} fontFamily={FONT} fontSize="12" fill={COLORS.purple} fontWeight="700">
+        1 warp = 32 threads (lanes) executing in lockstep
+      </text>
+      {Array.from({ length: laneCount }).map((_, t) => {
+        const x = warpInnerX + t * (laneW + laneGap)
+        return (
+          <g key={`lane-${t}`}>
+            <rect x={x} y={warpY + 24} width={laneW} height={22} rx="2"
+                  fill={COLORS.purple} fillOpacity="0.30" stroke={COLORS.purple} strokeWidth="0.5" />
+            <text x={x + laneW / 2} y={warpY + 39} fontFamily={MONO} fontSize="8"
+                  fill={COLORS.text} textAnchor="middle">{t}</text>
+          </g>
+        )
+      })}
+      <text x={W - warpInnerX + 20} y={warpY + 18}
+            fontFamily={MONO} fontSize="10" fill={COLORS.muted} textAnchor="end">
+        same instruction, 32 different data items (SIMT)
+      </text>
+
+      {/* ============ Bottom: the math summary ============ */}
+      <g>
+        <text x={W / 2} y={H - 88} fontFamily={FONT} fontSize="12" fill={COLORS.text} textAnchor="middle" fontWeight="700">
+          The relationships that matter
+        </text>
+        {[
+          { y: -68, c: COLORS.accent, t: 'Threads  →  Warps  →  Blocks  →  Grid' },
+          { y: -52, c: COLORS.green,  t: '32 threads = 1 warp · up to 32 warps (1024 threads) per SM at full occupancy' },
+          { y: -36, c: COLORS.orange, t: '65,536 regs ÷ (32 warps × 32 lanes) = 64 registers per thread at full occupancy' },
+          { y: -20, c: COLORS.yellow, t: '64 KB shared memory per SM is split between resident blocks (configurable)' },
+        ].map((r, i) => (
+          <text key={i} x={W / 2} y={H + r.y} fontFamily={MONO} fontSize="11" fill={r.c} textAnchor="middle">
+            {r.t}
+          </text>
+        ))}
+      </g>
+    </svg>
+  )
+}
+
 // Backwards-compat: legacy stub
 export const Placeholder = () => (
   <svg width="200" height="40" viewBox="0 0 200 40">
