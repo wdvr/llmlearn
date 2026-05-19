@@ -165,6 +165,31 @@ export const modules = [
       { id: 'attention-deeper', note: 'The KV cache mechanics in PyTorch — the layer beneath PagedAttention.' },
     ],
   },
+  {
+    id: 'capstone-e2e-llm',
+    title: 'Capstone: End-to-End — Train, Compile, Serve a Tiny LLM',
+    description: 'The flagship module. Train a ~10M-param Llama-style transformer on TinyStories (CUDA or MPS, your pick), write a custom Triton/torch.compile kernel, convert to HuggingFace format, then serve it with both vLLM and SGLang in Docker. Real endpoints you can curl. Step-debug every layer.',
+    sections: [
+      { title: "Welcome — What We're Going to Build, and Why" },
+      { title: 'Get and Prep the Dataset (TinyStories → packed token bins)' },
+      { title: 'The Model — A Llama-Style Transformer in ~150 Lines' },
+      { title: 'Training Loop — Device Picker, AdamW, Cosine Schedule, torch.compile, MFU' },
+      { title: 'Custom Kernel — Triton (CUDA) or torch.compile (MPS)' },
+      { title: 'Convert to HuggingFace Format (so vLLM and SGLang can load it)' },
+      { title: 'Serve with vLLM in Docker (PagedAttention + OpenAI API in 5 minutes)' },
+      { title: 'Serve with SGLang in Docker (RadixAttention + structured generation)' },
+      { title: 'Debugging the Full Stack (training → kernel → server → endpoint)' },
+      { title: "What You Just Built — and What's Next" },
+    ],
+    loader: () => import('./modules/capstone-e2e-llm.json'),
+    relatedModules: [
+      { id: 'tiny-transformer', note: 'The smaller hand-built transformer this capstone scales up.' },
+      { id: 'modern-llm-arch', note: 'RoPE, RMSNorm, SwiGLU — the modern bits used in the capstone model.' },
+      { id: 'inference-batching-vllm', note: 'PagedAttention / continuous batching theory; the capstone is the practice.' },
+      { id: 'cuda-tensor-cores', note: 'The hardware your training and inference are riding on.' },
+      { id: 'mps-mlx-framework', note: 'The Apple Silicon equivalent if you picked the MPS path.' },
+    ],
+  },
 ]
 
 // Cache for full module content keyed by module id.

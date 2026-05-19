@@ -4,9 +4,10 @@
 export const readingTimes = {
   'attention-deeper': 35,
   'autograd-backprop': 26,
+  'capstone-e2e-llm': 86,
   'cuda-convolution': 57,
   'cuda-histogram-sort': 56,
-  'cuda-intro-gpu': 53,
+  'cuda-intro-gpu': 52,
   'cuda-memory-model': 69,
   'cuda-mixed-precision': 12,
   'cuda-optimization-capstone': 65,
