@@ -90,6 +90,41 @@ function loadActive(files) {
   return files[0]?.id
 }
 
+// Translate IPython/Jupyter cell magics that aren't valid Python into
+// equivalent Pyodide calls, so code copy-pasted from Colab/Jupyter notebooks
+// runs without manual edits. Currently handles:
+//   !pip install pkg1 pkg2
+//   %pip install pkg1 pkg2
+// Both become: await __micropip_install([...])
+// Other ! / % lines are commented out with a friendly note so the rest of
+// the cell still runs.
+function preprocessPipMagics(code) {
+  const lines = code.split('\n')
+  let touched = false
+  const out = lines.map((line) => {
+    const m = line.match(/^(\s*)([!%])\s*pip\s+install\s+(.+?)\s*$/)
+    if (m) {
+      touched = true
+      const [, indent, , rest] = m
+      // Strip pip flags (-U, --quiet, etc.) — micropip doesn't take them.
+      const pkgs = rest
+        .split(/\s+/)
+        .filter(p => p && !p.startsWith('-'))
+        .map(p => p.replace(/^["']|["']$/g, ''))
+      const pyList = pkgs.map(p => JSON.stringify(p)).join(', ')
+      return `${indent}await __micropip_install([${pyList}])  # auto-translated from: ${line.trim()}`
+    }
+    // Other shell escapes — comment out with a hint.
+    const sh = line.match(/^(\s*)!\s*(.+)$/)
+    if (sh) {
+      touched = true
+      return `${sh[1]}# [browser sandbox can't run shell: ${sh[2]}]`
+    }
+    return line
+  })
+  return { code: out.join('\n'), touched }
+}
+
 // Module-level singleton: navigating away and back doesn't re-init Pyodide.
 let pyodideSingleton = null
 let pyodideLoading = null
@@ -111,6 +146,23 @@ async function getPyodide(onProgress) {
     pyodideSingleton = await window.loadPyodide({
       indexURL: `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`,
     })
+    // Eagerly load micropip + expose a small helper so the preprocessor's
+    // auto-translation of `!pip install X` → `await __micropip_install([...])`
+    // can run without the user having to load micropip themselves.
+    onProgress?.('Loading package manager (micropip)…')
+    await pyodideSingleton.loadPackage('micropip')
+    pyodideSingleton.runPython(`
+import micropip
+async def __micropip_install(pkgs):
+    if isinstance(pkgs, str):
+        pkgs = [pkgs]
+    for p in pkgs:
+        try:
+            await micropip.install(p)
+            print(f"[pip] installed {p}")
+        except Exception as e:
+            print(f"[pip] failed to install {p}: {e}")
+`)
     return pyodideSingleton
   })()
   try { return await pyodideLoading } finally { pyodideLoading = null }
@@ -215,8 +267,12 @@ export default function Scratch() {
       pyodide.setStderr({ batched: (s) => append(s + '\n') })
 
       const t0 = performance.now()
+      const { code: processed, touched } = preprocessPipMagics(activeFile.code)
+      if (touched) {
+        append('[runtime] translated `!pip install ...` lines to micropip\n')
+      }
       try {
-        await pyodide.runPythonAsync(activeFile.code)
+        await pyodide.runPythonAsync(processed)
       } catch (e) {
         append(String(e?.message || e) + '\n')
       }

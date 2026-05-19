@@ -777,6 +777,18 @@ export default function ModulePage({
   const prevModule = moduleIndex > 0 ? courseModules[moduleIndex - 1] : null
   const nextModule = moduleIndex < courseModules.length - 1 ? courseModules[moduleIndex + 1] : null
 
+  // Mobile floating action: 📍 Save spot. Visible only on small screens
+  // and only once the user has scrolled past the header. Single tap saves
+  // the current scroll position (force, no threshold). Mirrors the bottom
+  // bookmark button but always-reachable on phones.
+  const handleMobileBookmark = () => {
+    const y = window.scrollY || document.documentElement.scrollTop || 0
+    onSaveScrollPosition?.(id, y, currentSectionRef.current, { force: true })
+    setBookmarkFlash(true)
+    setTimeout(() => setBookmarkFlash(false), 1500)
+  }
+  const showMobileFab = fullModule && scrollProgress > 6 && scrollProgress < 96
+
   return (
     <div className="content">
       <div
@@ -1084,6 +1096,33 @@ export default function ModulePage({
           </Link>
         )}
       </div>
+
+      {/* Mobile floating action: always-reachable 'Save spot' bookmark
+          + 'Mark complete' on long pages. Hidden by CSS on desktop. */}
+      {showMobileFab && (
+        <div className="module-fab" role="group" aria-label="Module quick actions">
+          <button
+            type="button"
+            className={`module-fab-btn module-fab-bookmark ${bookmarkFlash ? 'flash' : ''}`}
+            onClick={handleMobileBookmark}
+            aria-label={bookmarkFlash ? 'Bookmarked' : 'Save your current spot'}
+          >
+            <span aria-hidden="true">{bookmarkFlash ? '✓' : '📍'}</span>
+            <span className="module-fab-label">{bookmarkFlash ? 'Saved' : 'Save spot'}</span>
+          </button>
+          {!completed.includes(module.id) && (
+            <button
+              type="button"
+              className="module-fab-btn module-fab-complete"
+              onClick={() => onComplete?.(module.id)}
+              aria-label="Mark module complete"
+            >
+              <span aria-hidden="true">✓</span>
+              <span className="module-fab-label">Done</span>
+            </button>
+          )}
+        </div>
+      )}
     </div>
   )
 }

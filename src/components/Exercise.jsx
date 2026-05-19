@@ -2,6 +2,39 @@ import React, { useState, useRef, useEffect } from 'react'
 import CodeBlock from './CodeBlock'
 import { inlineMd } from './inlineMd'
 
+// Translate IPython/Jupyter magic lines (which aren't valid Python and would
+// throw SyntaxError under Pyodide) into equivalent calls. Same logic as
+// Scratch.jsx — kept inline here so Exercise has no cross-component dep.
+function preprocessPipMagics(code) {
+  const lines = code.split('\n')
+  let touched = false
+  const out = lines.map((line) => {
+    const m = line.match(/^(\s*)([!%])\s*pip\s+install\s+(.+?)\s*$/)
+    if (m) {
+      touched = true
+      const [, indent, , rest] = m
+      const pkgs = rest
+        .split(/\s+/)
+        .filter(p => p && !p.startsWith('-'))
+        .map(p => p.replace(/^["']|["']$/g, ''))
+      const pyList = pkgs.map(p => JSON.stringify(p)).join(', ')
+      return `${indent}await __micropip_install([${pyList}])  # auto-translated from: ${line.trim()}`
+    }
+    const sh = line.match(/^(\s*)!\s*(.+)$/)
+    if (sh) {
+      touched = true
+      return `${sh[1]}# [browser sandbox can't run shell: ${sh[2]}]`
+    }
+    return line
+  })
+  return { code: out.join('\n'), touched }
+}
+
+function openInColab(code) {
+  try { navigator.clipboard?.writeText(code) } catch {}
+  window.open('https://colab.research.google.com/#create=true&language=python', '_blank', 'noopener,noreferrer')
+}
+
 export default function Exercise({ exercise }) {
   const [code, setCode] = useState(exercise.starterCode)
   const [showSolution, setShowSolution] = useState(false)
@@ -374,6 +407,22 @@ sys.modules['torch.optim'] = optim
 print("PyTorch shim loaded (numpy-backed, supports torch.nn, torch.optim)")
 `)
 
+          // Load micropip + expose __micropip_install so the !pip translator
+          // works without the user touching anything.
+          setOutput(prev => prev + 'Loading micropip…\n')
+          await pyodide.loadPackage('micropip')
+          pyodide.runPython(`
+import micropip
+async def __micropip_install(pkgs):
+    if isinstance(pkgs, str):
+        pkgs = [pkgs]
+    for p in pkgs:
+        try:
+            await micropip.install(p)
+            print(f"[pip] installed {p}")
+        except Exception as e:
+            print(f"[pip] failed to install {p}: {e}")
+`)
           setOutput(prev => prev + 'Python runtime ready!\n\n')
           setPyodideReady(true)
           setIsLoading(false)
@@ -419,45 +468,23 @@ print("PyTorch shim loaded (numpy-backed, supports torch.nn, torch.optim)")
     try {
       const pyodide = pyodideRef.current
 
-      // Wrap user code to capture output
-      const wrappedCode = `
-import sys
-import io
-from contextlib import redirect_stdout, redirect_stderr
+      // Pre-process so `!pip install X` / `%pip install X` (IPython magics
+      // that Pyodide can't parse) become async micropip calls. We use
+      // runPythonAsync so top-level `await` is legal.
+      const { code: processed, touched } = preprocessPipMagics(code)
+      let captured = ''
+      if (touched) captured += '[runtime] translated !pip lines to micropip\n'
 
-# Create string buffers for output
-_stdout_buffer = io.StringIO()
-_stderr_buffer = io.StringIO()
-
-try:
-    with redirect_stdout(_stdout_buffer), redirect_stderr(_stderr_buffer):
-${code.split('\n').map(line => '        ' + line).join('\n')}
-except Exception as e:
-    import traceback
-    _stderr_buffer.write(traceback.format_exc())
-
-# Store results
-_final_stdout = _stdout_buffer.getvalue()
-_final_stderr = _stderr_buffer.getvalue()
-`
+      pyodide.setStdout({ batched: (s) => { captured += s + '\n' } })
+      pyodide.setStderr({ batched: (s) => { captured += s + '\n' } })
 
       try {
-        pyodide.runPython(wrappedCode)
-
-        const stdout = pyodide.globals.get('_final_stdout')
-        const stderr = pyodide.globals.get('_final_stderr')
-
-        let result = ''
-        if (stdout) result += stdout
-        if (stderr) result += stderr
-
-        if (!result) result = 'Code executed successfully with no output.\n'
-
-        setOutput(result)
-        setIsRunning(false)
+        await pyodide.runPythonAsync(processed)
+        if (!captured) captured = 'Code executed successfully with no output.\n'
+        setOutput(captured)
       } catch (err) {
-        const errorMsg = err.toString()
-        setOutput(`Error executing code:\n${errorMsg}\n`)
+        setOutput(`${captured}Error: ${err?.message || err}\n`)
+      } finally {
         setIsRunning(false)
       }
     } catch (err) {
@@ -574,6 +601,13 @@ _final_stderr = _stderr_buffer.getvalue()
         </button>
         <button className="btn btn-secondary" onClick={handleReset}>
           Reset
+        </button>
+        <button
+          className="btn btn-secondary"
+          onClick={() => openInColab(code)}
+          title="Copy your code and open Google Colab (full Python, GPU, real !pip)"
+        >
+          Open in Colab
         </button>
         <button
           className="btn btn-primary"
